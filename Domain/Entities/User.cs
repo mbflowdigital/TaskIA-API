@@ -4,30 +4,36 @@ namespace Domain.Entities;
 
 /// <summary>
 /// Entidade de Usuário
-/// TODO: Implementar validações e métodos de negócio
+/// TODO: Implementar validações e métodos de negócio conforme necessário
 /// </summary>
 public class User : BaseEntity
 {
     [Required]
     [MaxLength(200)]
-    public string Name { get; private set; }
+    public string Name { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(256)]
-    public string Email { get; private set; }
+    public string Email { get; set; } = string.Empty;
 
     [MaxLength(20)]
-    public string? Phone { get; private set; }
+    public string? Phone { get; set; }
 
-    public bool IsEmailVerified { get; private set; }
+    public bool IsEmailVerified { get; set; }
 
-    // Construtor privado para EF Core
-    private User() 
-    { 
-        Name = string.Empty;
-        Email = string.Empty;
-    }
+    // Construtor público
+    public User() { }
 
-    // TODO: Implementar construtor público com validações
-    // TODO: Implementar métodos de atualização (UpdateEmail, UpdatePhone, etc)
+    // TODO: Adicionar construtor com parâmetros e validações se necessário
+    // public User(string name, string email, string? phone = null)
+    // {
+    //     // Validações aqui
+    //     Name = name;
+    //     Email = email;
+    //     Phone = phone;
+    // }
+
+    // TODO: Adicionar métodos de negócio conforme necessário
+    // public void UpdateEmail(string email) { }
+    // public void VerifyEmail() { }
 }
