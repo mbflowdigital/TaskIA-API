@@ -1,328 +1,416 @@
-# TaskIA
+# TaskIA API
 
-API construída com **Clean Architecture** e princípios **SOLID**.
+API construída com **Clean Architecture** e princípios **SOLID** usando .NET 9.0.
 
 ## 📁 Estrutura do Projeto
 
 ```
-TaskIA/
+TaskIA-API/
 │
-├── Domain/                      # Camada de Domínio
-│   ├── Common/                  # Classes compartilhadas (Result pattern)
-│   ├── Entities/                # Entidades de domínio
-│   └── Interfaces/              # Interfaces (repositórios, contratos)
+├── Domain/                      # ⭐ Camada de Domínio (núcleo)
+│   ├── Common/                  # Result Pattern
+│   ├── Entities/                # Entidades com Data Annotations
+│   │   ├── BaseEntity.cs        # Entidade base (Id, CreatedAt, UpdatedAt)
+│   │   └── User.cs              # Exemplo de entidade
+│   └── Interfaces/              # Contratos de repositórios
+│       ├── IRepository.cs       # Interface genérica
+│       ├── IUserRepository.cs   # Interface específica
+│       └── IUnitOfWork.cs       # Gerenciamento de transações
 │
-├── Application.Core/            # Camada de Aplicação
-│   ├── UseCases/                # Casos de uso / Services
+├── Application.Core/            # 🎯 Camada de Aplicação
+│   ├── Services/                # Lógica de negócio
+│   │   └── UserService.cs       # EXEMPLO COMPLETO implementado
 │   ├── DTOs/                    # Data Transfer Objects
-│   ├── Validators/              # Validadores FluentValidation
-│   └── Interfaces/              # Interfaces de Use Cases
+│   │   └── Users/               # DTOs de User
+│   ├── Validators/              # FluentValidation
+│   │   └── Users/               # Validadores de User
+│   └── Interfaces/              # Interfaces de Services
+│       └── IUserService.cs
 │
-├── API/                         # Camada de Apresentação (Web API)
+├── Application/                 # 🌐 Camada de Apresentação (API)
 │   ├── Controllers/             # Endpoints REST
-│   └── Program.cs               # Configuração da aplicação
+│   │   ├── HealthController.cs
+│   │   └── UsersController.cs
+│   ├── Program.cs               # Configuração da aplicação
+│   └── appsettings.json         # Configurações
 │
-├── Infrastructure/              # Camada de Infraestrutura
-│   ├── Data/                    # DbContext
-│   ├── Repositories/            # Implementações de repositórios
-│   └── UnitOfWork/              # Pattern Unit of Work
+├── Infrastructure/              # 🔧 Camada de Infraestrutura
+│   ├── Data/                    
+│   │   ├── ApplicationDbContext.cs  # EF Core DbContext
+│   │   └── Migrations/          # Migrations do banco
+│   ├── Repositories/            
+│   │   ├── Repository.cs        # ✅ Implementação genérica COMPLETA
+│   │   └── UserRepository.cs    # ✅ Exemplo específico COMPLETO
+│   └── UnitOfWork/              
+│       └── UnitOfWork.cs        # ✅ Implementação COMPLETA
 │
-└── CrossCutting/                # Concerns Transversais
-    ├── Exceptions/              # Exceções customizadas
-    ├── Middlewares/             # Middlewares globais
+└── CrossCutting/                # 🔀 Concerns Transversais
     └── Extensions/              # Extension methods
 ```
 
-## 🏗️ Arquitetura
+## 🏗️ Arquitetura - Princípios SOLID
 
-### Princípios Aplicados
+Veja documentação completa em [SOLID_ARCHITECTURE.md](SOLID_ARCHITECTURE.md)
 
-- **SOLID**
-  - **S**ingle Responsibility: Cada classe tem uma única responsabilidade
-  - **O**pen/Closed: Aberto para extensão, fechado para modificação
-  - **L**iskov Substitution: Interfaces bem definidas e substituíveis
-  - **I**nterface Segregation: Interfaces específicas por necessidade
-  - **D**ependency Inversion: Dependência de abstrações, não implementações
+### ✅ Princípios Implementados
 
-- **Clean Code**
-  - Nomenclatura clara e significativa
-  - Funções pequenas e focadas
-  - Comentários onde necessário
-  - DRY (Don't Repeat Yourself)
+#### **S** - Single Responsibility Principle
+- Cada classe tem uma única responsabilidade
+- `UserService` → Lógica de negócio de usuários
+- `UserRepository` → Acesso a dados de usuários
+- `UnitOfWork` → Gerenciamento de transações
 
-- **Clean Architecture**
-  - Separação de responsabilidades por camadas
-  - Dependências apontam para o centro (Domain)
-  - Regras de negócio independentes de frameworks
+#### **O** - Open/Closed Principle
+- Extensível via herança: `Repository<T>` pode ser herdado
+- Fechado para modificação: Use interfaces
 
-### Camadas
+#### **L** - Liskov Substitution Principle
+- Qualquer `IRepository<T>` pode ser substituído
+- `UserRepository` substitui `Repository<User>` perfeitamente
 
-#### 1️⃣ Domain
-Núcleo da aplicação, sem dependências externas. Contém:
-- Entidades de negócio
-- Interfaces de repositórios
-- Lógica de domínio pura
+#### **I** - Interface Segregation
+- Interfaces específicas: `IUserRepository` para User
+- Interfaces genéricas: `IRepository<T>` para todos
 
-#### 2️⃣ Application.Core
-Lógica de aplicação. Contém:
-- Use Cases (casos de uso)
-- DTOs para entrada/saída
-- Validadores
-- Interfaces de serviços
+#### **D** - Dependency Inversion
+- Dependência de abstrações (interfaces)
+- Injeção de dependência em todos os lugares
 
-#### 3️⃣ API
-Camada de apresentação (Controllers). Contém:
-- Controllers REST
-- Configuração de rotas
-- Middleware pipeline
-- Swagger/OpenAPI
+## 🚀 Quick Start
 
-#### 4️⃣ Infrastructure
-Implementações técnicas. Contém:
-- Acesso a dados (EF Core)
-- Repositórios concretos
-- Configurações de banco
+### 1️⃣ Pré-requisitos
 
-#### 5️⃣ CrossCutting
-Funcionalidades transversais. Contém:
-- Tratamento global de exceções
-- Logging
-- Middlewares
-- Extensions
+- **.NET 9.0 SDK**
+- **SQL Server** (ou LocalDB)
+- **Visual Studio 2022** / VS Code / Rider
 
-## 🚀 Como Começar
+### 2️⃣ Instalação
 
-### Pré-requisitos
-
-- .NET 9.0 SDK
-- SQL Server / PostgreSQL / ou use InMemory (configurado por padrão)
-- IDE: Visual Studio, VS Code ou Rider
-
-### Instalação
-
-1. Clone o repositório
 ```bash
+# Clone o repositório
 git clone <url-do-repositorio>
-cd TaskIA
-```
+cd TaskIA-API
 
-2. Restaure os pacotes
-```bash
+# Restaure os pacotes
 dotnet restore
+
+# Execute as migrations
+dotnet ef database update --project Infrastructure --startup-project Application
 ```
 
-3. Configure a connection string em `appsettings.json` (se usar banco real)
+### 3️⃣ Configuração
+
+Edite `Application/appsettings.json`:
+
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "sua-connection-string"
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=TaskIA;Trusted_Connection=true"
   }
 }
 ```
 
-4. Execute as migrations (quando criar entidades)
+### 4️⃣ Execute
+
 ```bash
-dotnet ef migrations add InitialCreate --project Infrastructure --startup-project API
-dotnet ef database update --project Infrastructure --startup-project API
+dotnet run --project Application
 ```
 
-5. Execute a aplicação
-```bash
-dotnet run --project API
+Acesse: **https://localhost:5001/swagger**
+
+## 📝 Guia para Desenvolvedores
+
+### ✅ Padrão COMPLETO Implementado (Use como Exemplo)
+
+#### 1. UserService - Métodos Implementados
+
+**CreateAsync** - Padrão de Criação
+```csharp
+✅ Validar regras de negócio
+✅ Criar entidade
+✅ Adicionar ao repositório
+✅ Commit via UnitOfWork
+✅ Mapear para DTO
+✅ Try/catch com mensagens claras
 ```
 
-6. Acesse o Swagger
-```
-https://localhost:5001
+**GetByIdAsync** - Padrão de Busca
+```csharp
+✅ Buscar no repositório
+✅ Validar se encontrou
+✅ Mapear para DTO
 ```
 
-## 📝 Como Adicionar Novas Funcionalidades
+**GetAllAsync** - Padrão de Listagem
+```csharp
+✅ Buscar todos
+✅ Mapear lista com LINQ
+✅ Retornar com contagem
+```
 
-### 1. Criar uma Entidade
+#### 2. UserRepository - Exemplo Específico
 
 ```csharp
-// Domain/Entities/Task.cs
-public class Task : BaseEntity
+public class UserRepository : Repository<User>, IUserRepository
 {
-    public string Title { get; private set; }
-    public string Description { get; private set; }
-    public bool IsCompleted { get; private set; }
-
-    private Task() { } // EF Core
-
-    public Task(string title, string description)
-    {
-        Title = title;
-        Description = description;
-        IsCompleted = false;
-    }
-
-    public void Complete() => IsCompleted = true;
+    // Métodos específicos de User
+    ✅ GetByEmailAsync()
+    ✅ EmailExistsAsync()
 }
 ```
 
-### 2. Criar um DTO
+#### 3. Repository<T> - Genérico Completo
 
 ```csharp
-// Application.Core/DTOs/TaskDto.cs
-namespace Application.Core.DTOs;
+✅ GetByIdAsync()
+✅ GetAllAsync()
+✅ FindAsync()
+✅ AddAsync()
+✅ UpdateAsync()
+✅ DeleteAsync()
+✅ ExistsAsync()
+```
 
-public record TaskDto
+### 🆕 Como Adicionar Nova Entidade
+
+#### Passo 1: Criar Entidade
+
+```csharp
+// Domain/Entities/Product.cs
+using System.ComponentModel.DataAnnotations;
+
+namespace Domain.Entities;
+
+public class Product : BaseEntity
+{
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = string.Empty;
+    
+    [Required]
+    public decimal Price { get; set; }
+    
+    public Product() { }
+}
+```
+
+#### Passo 2: Criar Interface do Repositório (Opcional)
+
+```csharp
+// Domain/Interfaces/IProductRepository.cs
+public interface IProductRepository : IRepository<Product>
+{
+    Task<IEnumerable<Product>> GetByPriceRangeAsync(
+        decimal min, decimal max, CancellationToken cancellationToken = default);
+}
+```
+
+#### Passo 3: Criar Repositório Específico (Opcional)
+
+```csharp
+// Infrastructure/Repositories/ProductRepository.cs
+public class ProductRepository : Repository<Product>, IProductRepository
+{
+    public ProductRepository(ApplicationDbContext context) : base(context) { }
+
+    public async Task<IEnumerable<Product>> GetByPriceRangeAsync(
+        decimal min, decimal max, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(p => p.Price >= min && p.Price <= max)
+            .ToListAsync(cancellationToken);
+    }
+}
+```
+
+#### Passo 4: Criar DTOs
+
+```csharp
+// Application.Core/DTOs/Products/ProductDto.cs
+public record ProductDto
 {
     public Guid Id { get; init; }
-    public string Title { get; init; } = string.Empty;
-    public string Description { get; init; } = string.Empty;
-    public bool IsCompleted { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public decimal Price { get; init; }
 }
 ```
 
-### 3. Criar um Use Case
+#### Passo 5: Criar Service
 
 ```csharp
-// Application.Core/UseCases/Tasks/CreateTaskUseCase.cs
-using Application.Core.Interfaces;
-using Application.Core.DTOs;
-using Domain.Common;
-using Domain.Interfaces;
-
-namespace Application.Core.UseCases.Tasks;
-
-public class CreateTaskUseCase : IUseCase<CreateTaskRequest, TaskDto>
+// Application.Core/Services/ProductService.cs
+public class ProductService : IProductService
 {
-    private readonly IRepository<Task> _repository;
+    private readonly IProductRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public CreateTaskUseCase(IRepository<Task> repository, IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _unitOfWork = unitOfWork;
-    }
-
-    public async Task<Result<TaskDto>> ExecuteAsync(
-        CreateTaskRequest request, 
-        CancellationToken cancellationToken)
-    {
-        var task = new Task(request.Title, request.Description);
-        await _repository.AddAsync(task, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
-
-        var dto = new TaskDto 
-        { 
-            Id = task.Id, 
-            Title = task.Title, 
-            Description = task.Description 
-        };
-
-        return Result<TaskDto>.Success(dto, "Task criada com sucesso");
-    }
-}
-
-public record CreateTaskRequest(string Title, string Description);
-```
-
-### 4. Criar um Validator
-
-```csharp
-// Application.Core/Validators/CreateTaskRequestValidator.cs
-using FluentValidation;
-
-namespace Application.Core.Validators;
-
-public class CreateTaskRequestValidator : AbstractValidator<CreateTaskRequest>
-{
-    public CreateTaskRequestValidator()
-    {
-        RuleFor(x => x.Title)
-            .NotEmpty().WithMessage("Título é obrigatório")
-            .MaximumLength(200).WithMessage("Título deve ter no máximo 200 caracteres");
-
-        RuleFor(x => x.Description)
-            .MaximumLength(1000).WithMessage("Descrição deve ter no máximo 1000 caracteres");
-    }
+    // Implemente seguindo o padrão do UserService
 }
 ```
 
-### 5. Registrar no DI
+#### Passo 6: Registrar DI
 
-```csharp
-// Application.Core/DependencyInjection.cs
-services.AddScoped<IUseCase<CreateTaskRequest, TaskDto>, CreateTaskUseCase>();
-```
-
-### 6. Criar o Controller
-
-```csharp
-// API/Controllers/TasksController.cs
-using Application.Core.Interfaces;
-using Application.Core.UseCases.Tasks;
-using Microsoft.AspNetCore.Mvc;
-
-namespace API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class TasksController : ControllerBase
-{
-    [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateTaskRequest request,
-        [FromServices] IUseCase<CreateTaskRequest, TaskDto> useCase,
-        CancellationToken cancellationToken)
-    {
-        var result = await useCase.ExecuteAsync(request, cancellationToken);
-        return result.IsSuccess ? Ok(result) : BadRequest(result);
-    }
-}
-```
-
-## 🔧 Configuração de Banco de Dados
-
-Por padrão, o projeto usa **InMemory** para facilitar o desenvolvimento. Para usar um banco real:
-
-### SQL Server
 ```csharp
 // Infrastructure/DependencyInjection.cs
-services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+services.AddScoped<IProductRepository, ProductRepository>();
+
+// Application.Core/DependencyInjection.cs
+services.AddScoped<IProductService, ProductService>();
 ```
 
-### PostgreSQL
+#### Passo 7: Adicionar DbSet
+
 ```csharp
-services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+// Infrastructure/Data/ApplicationDbContext.cs
+public DbSet<Product> Products { get; set; } = null!;
 ```
 
-## 📚 Padrões Utilizados
+#### Passo 8: Criar Migration
 
-- **Repository Pattern**: Abstração do acesso a dados
-- **Unit of Work**: Gerenciamento de transações
-- **Result Pattern**: Retorno de operações sem exceções
-- **Dependency Injection**: Inversão de controle
-- **DTO Pattern**: Separação entre domínio e apresentação
-
-## 🧪 Testes (A Implementar)
-
-Crie projetos de teste para cada camada:
 ```bash
-dotnet new xunit -n Domain.Tests
-dotnet new xunit -n Application.Tests
-dotnet new xunit -n Infrastructure.Tests
+dotnet ef migrations add AddProduct --project Infrastructure --startup-project Application
+dotnet ef database update --project Infrastructure --startup-project Application
 ```
 
-## 📦 Pacotes Principais
+## 🔧 Tecnologias
 
-- **Microsoft.EntityFrameworkCore** - ORM
-- **FluentValidation** - Validação de dados
-- **Swashbuckle.AspNetCore** - Documentação OpenAPI/Swagger
+| Pacote | Versão | Uso |
+|--------|--------|-----|
+| .NET | 9.0 | Framework |
+| Entity Framework Core | 9.0.0 | ORM |
+| SQL Server | 9.0.0 | Banco de dados |
+| FluentValidation | 12.1.1 | Validação |
+| Swashbuckle | 7.2.0 | Swagger/OpenAPI |
 
-## 👥 Contribuindo
+## 📦 Padrões Implementados
 
-1. Siga os princípios SOLID e Clean Code
-2. Mantenha a separação de responsabilidades entre camadas
-3. Documente código complexo
-4. Escreva testes unitários
-5. Use nomes descritivos para classes, métodos e variáveis
+✅ **Repository Pattern** - Abstração completa de acesso a dados  
+✅ **Unit of Work** - Gerenciamento de transações  
+✅ **Result Pattern** - Retorno seguro sem exceções  
+✅ **Dependency Injection** - Inversão de controle total  
+✅ **DTO Pattern** - Separação domínio/apresentação  
+✅ **Clean Architecture** - Camadas bem definidas  
+✅ **SOLID Principles** - Todos os 5 princípios
+
+## 🎯 Estrutura de Retorno (Result Pattern)
+
+```csharp
+// Sucesso
+Result<UserDto>.Success(userDto, "Usuário criado com sucesso");
+
+// Falha
+Result<UserDto>.Failure("Email já cadastrado");
+
+// No Controller
+return result.IsSuccess ? Ok(result) : BadRequest(result);
+```
+
+## 🧪 TODO - Testes
+
+```bash
+# Criar projetos de teste
+dotnet new xunit -n Domain.Tests
+dotnet new xunit -n Application.Core.Tests
+dotnet new xunit -n Infrastructure.Tests
+dotnet new xunit -n API.Tests
+```
+
+## 📚 Documentação Adicional
+
+- [SOLID_ARCHITECTURE.md](SOLID_ARCHITECTURE.md) - Princípios SOLID detalhados
+- [Swagger UI](https://localhost:5001/swagger) - Documentação interativa da API
+
+## 👥 Convenções de Código
+
+1. ✅ Use **async/await** em todos os métodos de I/O
+2. ✅ **CancellationToken** em todos os métodos assíncronos
+3. ✅ **Try/catch** em operações de escrita
+4. ✅ **Validação** antes de persistir
+5. ✅ **Result Pattern** para retornos
+6. ✅ **DTOs** para comunicação entre camadas
+7. ✅ **Data Annotations** nas entidades
+8. ✅ Métodos **privados** para mapeamento (MapToDto)
+
+## 🚀 Próximos Passos
+
+- [ ] Implementar autenticação JWT
+- [ ] Adicionar projetos de testes unitários
+- [ ] Implementar logging (Serilog)
+- [ ] Adicionar Health Checks
+- [ ] Implementar paginação
+- [ ] Adicionar cache (Redis)
+- [ ] Implementar CQRS (opcional)
 
 ## 📄 Licença
 
-[Defina sua licença aqui]
+MIT License## 🔧 Tecnologias
+
+| Pacote | Versão | Uso |
+|--------|--------|-----|
+| .NET | 9.0 | Framework |
+| Entity Framework Core | 9.0.0 | ORM |
+| SQL Server | 9.0.0 | Banco de dados |
+| FluentValidation | 12.1.1 | Validação |
+| Swashbuckle | 7.2.0 | Swagger/OpenAPI |
+
+## 📦 Padrões Implementados
+
+✅ **Repository Pattern** - Abstração completa de acesso a dados  
+✅ **Unit of Work** - Gerenciamento de transações  
+✅ **Result Pattern** - Retorno seguro sem exceções  
+✅ **Dependency Injection** - Inversão de controle total  
+✅ **DTO Pattern** - Separação domínio/apresentação  
+✅ **Clean Architecture** - Camadas bem definidas  
+✅ **SOLID Principles** - Todos os 5 princípios
+
+## 🎯 Estrutura de Retorno (Result Pattern)
+
+```csharp
+// Sucesso
+Result<UserDto>.Success(userDto, "Usuário criado com sucesso");
+
+// Falha
+Result<UserDto>.Failure("Email já cadastrado");
+
+// No Controller
+return result.IsSuccess ? Ok(result) : BadRequest(result);
+```
+
+## 🧪 TODO - Testes
+
+```bash
+# Criar projetos de teste
+dotnet new xunit -n Domain.Tests
+dotnet new xunit -n Application.Core.Tests
+dotnet new xunit -n Infrastructure.Tests
+dotnet new xunit -n API.Tests
+```
+
+## 📚 Documentação Adicional
+
+- [SOLID_ARCHITECTURE.md](SOLID_ARCHITECTURE.md) - Princípios SOLID detalhados
+- [Swagger UI](https://localhost:5001/swagger) - Documentação interativa da API
+
+## 👥 Convenções de Código
+
+1. ✅ Use **async/await** em todos os métodos de I/O
+2. ✅ **CancellationToken** em todos os métodos assíncronos
+3. ✅ **Try/catch** em operações de escrita
+4. ✅ **Validação** antes de persistir
+5. ✅ **Result Pattern** para retornos
+6. ✅ **DTOs** para comunicação entre camadas
+7. ✅ **Data Annotations** nas entidades
+8. ✅ Métodos **privados** para mapeamento (MapToDto)
+
+## 🚀 Próximos Passos
+
+- [ ] Implementar autenticação JWT
+- [ ] Adicionar projetos de testes unitários
+- [ ] Implementar logging (Serilog)
+- [ ] Adicionar Health Checks
+- [ ] Implementar paginação
+- [ ] Adicionar cache (Redis)
+- [ ] Implementar CQRS (opcional)
+
+## 📄 Licença
+
+MIT License
