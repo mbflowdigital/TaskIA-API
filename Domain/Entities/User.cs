@@ -24,6 +24,19 @@ public class User : BaseEntity
     // Construtor público
     public User() { }
 
+    public void UpdateProfile(string name, string? phone)
+    {
+        Name = name;
+        Phone = phone;
+        SetUpdatedAt();
+    }
+
+    public void SoftDelete()
+    {
+        Deactivate();
+        SetUpdatedAt();
+    }
+
     // TODO: Adicionar construtor com parâmetros e validações se necessário
     // public User(string name, string email, string? phone = null)
     // {

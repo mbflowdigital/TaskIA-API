@@ -6,15 +6,22 @@ using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configurar CORS para Angular
+// Configurar CORS para frontends (Angular/React)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins(
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>()
+            ?? [
                 "http://localhost:4200",
-                "http://localhost:4201"
-            )
+                "http://localhost:4201",
+                "http://localhost:8080"
+            ];
+
+        policy
+            .WithOrigins(allowedOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
