@@ -116,7 +116,37 @@ public class UserService : IUserService
         UpdateUserRequest request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("TODO: Implementar atualização de usuário");
+        try
+        {
+            // 1. Buscar usuário existente
+            var user = await _userRepository.GetByIdAsync(request.Id, cancellationToken);
+            if (user == null)
+            {
+                return Result<UserDto>.Failure(
+                    $"Usuário não encontrado. Não foi encontrado usuário com ID {request.Id}");
+            }
+
+            // 2. Validar se está ativo
+            if (!user.IsActive)
+            {
+                return Result<UserDto>.Failure("Usuário está desativado e não pode ser atualizado");
+            }
+
+            // 3. Aplicar alterações na entidade (regra de negócio na entidade)
+            user.UpdateProfile(request.Name, request.Phone);
+
+            // 4. Persistir alterações
+            await _userRepository.UpdateAsync(user, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            // 5. Retornar DTO
+            return Result<UserDto>.Success(MapToDto(user), "Usuário atualizado com sucesso");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<UserDto>.Failure($"Erro ao atualizar usuário: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -127,7 +157,34 @@ public class UserService : IUserService
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("TODO: Implementar desativação de usuário");
+        try
+        {
+            // 1. Buscar usuário existente
+            var user = await _userRepository.GetByIdAsync(id, cancellationToken);
+            if (user == null)
+            {
+                return Result.Failure($"Usuário não encontrado. Não foi encontrado usuário com ID {id}");
+            }
+
+            // 2. Soft delete
+            if (!user.IsActive)
+            {
+                return Result.Success("Usuário já está desativado");
+            }
+
+            user.SoftDelete();
+
+            // 3. Persistir alterações
+            await _userRepository.UpdateAsync(user, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Usuário desativado com sucesso");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result.Failure($"Erro ao desativar usuário: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -138,7 +195,21 @@ public class UserService : IUserService
         string email,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("TODO: Implementar busca por email");
+        var normalized = email.Trim().ToLower();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return Result<IEnumerable<UserDto>>.Failure("Email é obrigatório");
+        }
+
+        // Busca por correspondência parcial
+        var users = await _userRepository.FindAsync(
+            u => u.IsActive && u.Email.Contains(normalized),
+            cancellationToken);
+
+        var userDtos = users.Select(MapToDto).ToList();
+        return Result<IEnumerable<UserDto>>.Success(
+            userDtos,
+            $"{userDtos.Count} usuário(s) encontrado(s)");
     }
 
     /// <summary>
@@ -149,7 +220,13 @@ public class UserService : IUserService
         string email,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("TODO: Implementar verificação de email");
+        var normalized = email.Trim().ToLower();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        return await _userRepository.EmailExistsAsync(normalized, cancellationToken);
     }
 
     /// <summary>
