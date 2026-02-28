@@ -17,4 +17,5 @@ public interface IProjectService
     Task<Result<IEnumerable<ProjectDto>>> FindByNameAsync(string name, CancellationToken cancellationToken = default);
     Task<Result<IEnumerable<ProjectDto>>> FindByStatusAsync(string status, CancellationToken cancellationToken = default);
     Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken = default);
+    Task<Result<ProjectDto>> ToggleStatusAsync(Guid id, CancellationToken cancellationToken = default);
 }

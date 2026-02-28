@@ -14,7 +14,7 @@ public abstract class BaseEntity
     protected BaseEntity()
     {
         Id = Guid.NewGuid();
-        CreatedAt = DateTime.UtcNow;
+        CreatedAt = GetBrazilianTime();
         IsActive = true;
     }
 
@@ -23,6 +23,15 @@ public abstract class BaseEntity
     
     protected void SetUpdatedAt()
     {
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = GetBrazilianTime();
+    }
+
+    /// <summary>
+    /// Obtém a hora atual no fuso horário de Brasília (UTC-3)
+    /// </summary>
+    private static DateTime GetBrazilianTime()
+    {
+        var brazilTimeZone = TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time");
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, brazilTimeZone);
     }
 }

@@ -19,7 +19,7 @@ public class CreateProjectRequestValidator : AbstractValidator<CreateProjectRequ
             .When(x => !string.IsNullOrEmpty(x.Objective));
 
         RuleFor(x => x.Status)
-            .Must(BeValidStatus).WithMessage("Status inválido. Use: Draft, Active, Paused, Completed ou Cancelled")
+            .Must(BeValidStatus).WithMessage("Status inválido. Use: Draft, Active, Paused, Completed, Cancelled ou Inactive")
             .When(x => !string.IsNullOrEmpty(x.Status));
 
         RuleFor(x => x.EndDate)
@@ -35,7 +35,7 @@ public class CreateProjectRequestValidator : AbstractValidator<CreateProjectRequ
     {
         if (string.IsNullOrEmpty(status)) return true;
         
-        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled" };
+        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Inactive" };
         return validStatuses.Contains(status);
     }
 }
@@ -60,7 +60,7 @@ public class UpdateProjectRequestValidator : AbstractValidator<UpdateProjectRequ
 
         RuleFor(x => x.Status)
             .NotEmpty().WithMessage("Status é obrigatório")
-            .Must(BeValidStatus).WithMessage("Status inválido. Use: Draft, Active, Paused, Completed ou Cancelled");
+            .Must(BeValidStatus).WithMessage("Status inválido. Use: Draft, Active, Paused, Completed, Cancelled ou Inactive");
 
         RuleFor(x => x.EndDate)
             .GreaterThanOrEqualTo(x => x.StartDate)
@@ -70,7 +70,7 @@ public class UpdateProjectRequestValidator : AbstractValidator<UpdateProjectRequ
 
     private bool BeValidStatus(string status)
     {
-        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled" };
+        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Inactive" };
         return validStatuses.Contains(status);
     }
 }

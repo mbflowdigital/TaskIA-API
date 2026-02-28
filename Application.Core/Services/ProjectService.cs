@@ -299,6 +299,54 @@ public class ProjectService : IProjectService
     }
 
     /// <summary>
+    /// Alterna status do projeto entre Active e Inactive automaticamente
+    /// </summary>
+    public async Task<Result<ProjectDto>> ToggleStatusAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Buscar projeto existente
+            var project = await _projectRepository.GetByIdAsync(id, cancellationToken);
+            if (project == null)
+            {
+                return Result<ProjectDto>.Failure(
+                    $"Projeto não encontrado. Não foi encontrado projeto com ID {id}");
+            }
+
+            // 2. Validar se está ativo (IsActive = true)
+            if (!project.IsActive)
+            {
+                return Result<ProjectDto>.Failure(
+                    "Projeto está desativado (deletado) e não pode ter status alterado");
+            }
+
+            // 3. Determinar novo status automaticamente (toggle)
+            var newStatus = project.Status == "Active" ? "Inactive" : "Active";
+
+            // 4. Alterar status
+            project.UpdateStatus(newStatus);
+
+            // 5. Persistir alterações
+            await _projectRepository.UpdateAsync(project, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            // 6. Retornar DTO com mensagem apropriada
+            var message = newStatus == "Active" 
+                ? "Projeto ativado com sucesso" 
+                : "Projeto inativado com sucesso";
+                
+            return Result<ProjectDto>.Success(MapToDto(project), message);
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<ProjectDto>.Failure($"Erro ao alterar status do projeto: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Mapeia entidade Project para ProjectDto
     /// </summary>
     private static ProjectDto MapToDto(Project project)

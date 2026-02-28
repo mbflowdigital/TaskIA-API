@@ -147,4 +147,18 @@ public class ProjectsController : ControllerBase
         var exists = await _projectService.NameExistsAsync(name, cancellationToken);
         return Ok(new { exists, message = exists ? "Nome já cadastrado" : "Nome disponível" });
     }
+
+    /// <summary>
+    /// Alterna status do projeto entre Active e Inactive automaticamente
+    /// </summary>
+    [HttpPatch("{id:guid}/status")]
+    [ProducesResponseType(typeof(Result<ProjectDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ToggleStatus(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _projectService.ToggleStatusAsync(id, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
 }

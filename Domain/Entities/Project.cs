@@ -20,7 +20,7 @@ public class Project : BaseEntity
 
     [Required]
     [MaxLength(50)]
-    public string Status { get; set; } = "Draft"; // Draft, Active, Paused, Completed, Cancelled
+    public string Status { get; set; } = "Draft"; // Draft, Active, Paused, Completed, Cancelled, Inactive
 
     public DateTime? StartDate { get; set; }
 
@@ -62,11 +62,30 @@ public class Project : BaseEntity
     }
 
     /// <summary>
+    /// Inativa o projeto (altera status para Inactive, mas mantém IsActive = true)
+    /// </summary>
+    public void SetInactive()
+    {
+        Status = "Inactive";
+        SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Cancela o projeto (altera status para Cancelled e desativa)
+    /// </summary>
+    public void Cancel()
+    {
+        Status = "Cancelled";
+        Deactivate();
+        SetUpdatedAt();
+    }
+
+    /// <summary>
     /// Valida se o status é válido
     /// </summary>
     private static bool IsValidStatus(string status)
     {
-        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled" };
+        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Inactive" };
         return validStatuses.Contains(status);
     }
 

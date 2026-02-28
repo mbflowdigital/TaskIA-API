@@ -47,3 +47,11 @@ public class UpdateProjectRequest
     public DateTime? EndDate { get; set; }
     // UserId não pode ser alterado (quem criou permanece)
 }
+
+/// <summary>
+/// DTO para alteração de status do projeto (Active/Inactive)
+/// </summary>
+public class ChangeStatusRequest
+{
+    public string Status { get; set; } = string.Empty; // "Active" ou "Inactive"
+}
