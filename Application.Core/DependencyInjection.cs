@@ -20,6 +20,7 @@ public static class DependencyInjection
         // Services - Registrando interface -> implementação (Dependency Inversion)
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProjectService, ProjectService>();
+        services.AddScoped<IAuthService, AuthService>();
         
         // Adicione outros services aqui seguindo o mesmo padrão
         // services.AddScoped<IProductService, ProductService>();

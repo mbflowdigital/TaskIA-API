@@ -34,6 +34,28 @@ public class UserRepository : Repository<User>, IUserRepository
             .AnyAsync(u => u.Email == email.ToLower(), cancellationToken);
     }
 
+    /// <summary>
+    /// Busca usuário por CPF
+    /// </summary>
+    public async Task<User?> GetByCPFAsync(string cpf, CancellationToken cancellationToken = default)
+    {
+        var normalizedCPF = cpf.Replace(".", "").Replace("-", "").Trim();
+        
+        return await _dbSet
+            .FirstOrDefaultAsync(u => u.CPF == normalizedCPF && u.IsActive, cancellationToken);
+    }
+
+    /// <summary>
+    /// Verifica se CPF já existe no banco
+    /// </summary>
+    public async Task<bool> CPFExistsAsync(string cpf, CancellationToken cancellationToken = default)
+    {
+        var normalizedCPF = cpf.Replace(".", "").Replace("-", "").Trim();
+        
+        return await _dbSet
+            .AnyAsync(u => u.CPF == normalizedCPF, cancellationToken);
+    }
+
     // TODO: Exemplo de método específico que pode ser adicionado
     // public async Task<IEnumerable<User>> GetVerifiedUsersAsync(CancellationToken cancellationToken = default)
     // {

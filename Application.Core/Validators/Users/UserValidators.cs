@@ -20,6 +20,16 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
             .EmailAddress().WithMessage("Email inválido")
             .MaximumLength(150).WithMessage("Email deve ter no máximo 150 caracteres");
 
+        RuleFor(x => x.CPF)
+            .NotEmpty().WithMessage("CPF é obrigatório")
+            .Length(11).WithMessage("CPF deve ter 11 dígitos")
+            .Matches(@"^\d{11}$").WithMessage("CPF deve conter apenas números");
+
+        RuleFor(x => x.BirthDate)
+            .NotEmpty().WithMessage("Data de nascimento é obrigatória")
+            .LessThan(DateTime.Today).WithMessage("Data de nascimento deve ser anterior a hoje")
+            .GreaterThan(DateTime.Today.AddYears(-120)).WithMessage("Data de nascimento inválida");
+
         RuleFor(x => x.Phone)
             .MaximumLength(20).WithMessage("Telefone deve ter no máximo 20 caracteres")
             .When(x => !string.IsNullOrEmpty(x.Phone));

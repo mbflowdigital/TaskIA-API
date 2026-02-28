@@ -18,6 +18,16 @@ public interface IUserRepository : IRepository<User>
     /// </summary>
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Busca usuário por CPF
+    /// </summary>
+    Task<User?> GetByCPFAsync(string cpf, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verifica se CPF já existe
+    /// </summary>
+    Task<bool> CPFExistsAsync(string cpf, CancellationToken cancellationToken = default);
+
     // TODO: Adicionar outros métodos específicos conforme necessário
     // Exemplo: Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);
 }

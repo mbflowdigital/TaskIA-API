@@ -1,5 +1,6 @@
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
+using Application.Core.Services;
 using Domain.Common;
 using Domain.Entities;
 using Domain.Interfaces;
@@ -7,9 +8,10 @@ using Domain.Interfaces;
 namespace Application.Core.Services;
 
 /// <summary>
-/// Service de Usuários
+/// Service de Users
 /// Contém toda a lógica de negócio relacionada a usuários
 /// Implementa IUserService seguindo Dependency Inversion Principle
+/// Este é um EXEMPLO de Service para os desenvolvedores seguirem o padrão
 /// </summary>
 public class UserService : IUserService
 {
@@ -24,7 +26,6 @@ public class UserService : IUserService
 
     /// <summary>
     /// Cria um novo usuário
-    /// EXEMPLO: Padrão de implementação com validação, persistência e tratamento de erros
     /// </summary>
     public async Task<Result<UserDto>> CreateAsync(
         CreateUserRequest request,
@@ -37,27 +38,41 @@ public class UserService : IUserService
             if (emailExists)
             {
                 return Result<UserDto>.Failure(
-                    "Email já cadastrado. Este email já está sendo utilizado por outro usuário.");
+                    "Email já cadastrado. Escolha outro email para o usuário.");
             }
 
-            // 2. Criar a entidade (regras de negócio na entidade)
+            // 2. Validar se CPF já existe
+            var cpfExists = await _userRepository.CPFExistsAsync(request.CPF, cancellationToken);
+            if (cpfExists)
+            {
+                return Result<UserDto>.Failure(
+                    "CPF já cadastrado. Escolha outro CPF.");
+            }
+
+            // 3. Criar entidade User
             var user = new User
             {
                 Name = request.Name,
                 Email = request.Email.ToLower(),
                 Phone = request.Phone,
-                IsEmailVerified = false
+                CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
+                BirthDate = request.BirthDate
             };
 
-            // 3. Adicionar ao repositório
+            // 4. Hash da senha padrão (data de nascimento: ddMMyyyy)
+            var defaultPassword = user.GetDefaultPassword();
+            user.PasswordHash = AuthService.HashPassword(defaultPassword);
+
+            // 5. Adicionar ao repositório
             await _userRepository.AddAsync(user, cancellationToken);
 
-            // 4. Salvar alterações (Unit of Work)
+            // 6. Salvar alterações
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            // 5. Mapear para DTO e retornar
-            var userDto = MapToDto(user);
-            return Result<UserDto>.Success(userDto, "Usuário criado com sucesso");
+            // 7. Retornar DTO
+            return Result<UserDto>.Success(
+                MapToDto(user), 
+                $"Usuário criado com sucesso. Senha padrão: {defaultPassword} (alterar no primeiro acesso)");
         }
         catch (Exception ex)
         {
@@ -68,7 +83,6 @@ public class UserService : IUserService
 
     /// <summary>
     /// Busca usuário por ID
-    /// EXEMPLO: Padrão de busca com validação de existência
     /// </summary>
     public async Task<Result<UserDto>> GetByIdAsync(
         Guid id,
@@ -76,19 +90,13 @@ public class UserService : IUserService
     {
         try
         {
-            // 1. Buscar no repositório
             var user = await _userRepository.GetByIdAsync(id, cancellationToken);
-
-            // 2. Validar se encontrou
             if (user == null)
             {
-                return Result<UserDto>.Failure(
-                    $"Usuário não encontrado. Não foi encontrado usuário com ID {id}");
+                return Result<UserDto>.Failure($"Usuário não encontrado com ID {id}");
             }
 
-            // 3. Mapear para DTO e retornar
-            var userDto = MapToDto(user);
-            return Result<UserDto>.Success(userDto);
+            return Result<UserDto>.Success(MapToDto(user));
         }
         catch (Exception ex)
         {
@@ -99,20 +107,15 @@ public class UserService : IUserService
 
     /// <summary>
     /// Lista todos os usuários ativos
-    /// EXEMPLO: Padrão de listagem com mapeamento em lote
     /// </summary>
     public async Task<Result<IEnumerable<UserDto>>> GetAllAsync(
         CancellationToken cancellationToken = default)
     {
         try
         {
-            // 1. Buscar todos no repositório
             var users = await _userRepository.GetAllAsync(cancellationToken);
-
-            // 2. Mapear para lista de DTOs
-            var userDtos = users.Select(MapToDto).ToList();
-
-            // 3. Retornar com mensagem de sucesso
+            var userDtos = users.Where(u => u.IsActive).Select(MapToDto).ToList();
+            
             return Result<IEnumerable<UserDto>>.Success(
                 userDtos,
                 $"{userDtos.Count} usuário(s) encontrado(s)");
@@ -120,13 +123,12 @@ public class UserService : IUserService
         catch (Exception ex)
         {
             // TODO: Implementar logging aqui
-            return Result<IEnumerable<UserDto>>.Failure($"Erro ao listar usuários: {ex.Message} | StackTrace: {ex.StackTrace}");
+            return Result<IEnumerable<UserDto>>.Failure($"Erro ao listar usuários: {ex.Message}");
         }
     }
 
     /// <summary>
     /// Atualiza informações do usuário
-    /// TODO: Implementar busca, atualização e persistência
     /// </summary>
     public async Task<Result<UserDto>> UpdateAsync(
         UpdateUserRequest request,
@@ -134,28 +136,24 @@ public class UserService : IUserService
     {
         try
         {
-            // 1. Buscar usuário existente
             var user = await _userRepository.GetByIdAsync(request.Id, cancellationToken);
             if (user == null)
             {
-                return Result<UserDto>.Failure(
-                    $"Usuário não encontrado. Não foi encontrado usuário com ID {request.Id}");
+                return Result<UserDto>.Failure($"Usuário não encontrado com ID {request.Id}");
             }
 
-            // 2. Validar se está ativo
             if (!user.IsActive)
             {
                 return Result<UserDto>.Failure("Usuário está desativado e não pode ser atualizado");
             }
 
-            // 3. Aplicar alterações na entidade (regra de negócio na entidade)
+            // Atualizar informações
             user.UpdateProfile(request.Name, request.Phone);
 
-            // 4. Persistir alterações
+            // Persistir alterações
             await _userRepository.UpdateAsync(user, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            // 5. Retornar DTO
             return Result<UserDto>.Success(MapToDto(user), "Usuário atualizado com sucesso");
         }
         catch (Exception ex)
@@ -167,7 +165,6 @@ public class UserService : IUserService
 
     /// <summary>
     /// Desativa um usuário (soft delete)
-    /// TODO: Implementar desativação
     /// </summary>
     public async Task<Result> DeleteAsync(
         Guid id,
@@ -175,22 +172,21 @@ public class UserService : IUserService
     {
         try
         {
-            // 1. Buscar usuário existente
             var user = await _userRepository.GetByIdAsync(id, cancellationToken);
             if (user == null)
             {
-                return Result.Failure($"Usuário não encontrado. Não foi encontrado usuário com ID {id}");
+                return Result.Failure($"Usuário não encontrado com ID {id}");
             }
 
-            // 2. Soft delete
             if (!user.IsActive)
             {
                 return Result.Success("Usuário já está desativado");
             }
 
+            // Soft delete
             user.SoftDelete();
 
-            // 3. Persistir alterações
+            // Persistir alterações
             await _userRepository.UpdateAsync(user, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
 
@@ -205,7 +201,6 @@ public class UserService : IUserService
 
     /// <summary>
     /// Busca usuários por email
-    /// TODO: Implementar busca por email
     /// </summary>
     public async Task<Result<IEnumerable<UserDto>>> FindByEmailAsync(
         string email,
@@ -213,32 +208,26 @@ public class UserService : IUserService
     {
         try
         {
-            var normalized = email.Trim().ToLower();
-            if (string.IsNullOrWhiteSpace(normalized))
+            var user = await _userRepository.GetByEmailAsync(email, cancellationToken);
+            if (user == null)
             {
-                return Result<IEnumerable<UserDto>>.Failure("Email é obrigatório");
+                return Result<IEnumerable<UserDto>>.Success(
+                    Enumerable.Empty<UserDto>(),
+                    "Nenhum usuário encontrado");
             }
 
-            // Busca por correspondência parcial
-            var users = await _userRepository.FindAsync(
-                u => u.IsActive && u.Email.Contains(normalized),
-                cancellationToken);
-
-            var userDtos = users.Select(MapToDto).ToList();
-            return Result<IEnumerable<UserDto>>.Success(
-                userDtos,
-                $"{userDtos.Count} usuário(s) encontrado(s)");
+            var users = new List<UserDto> { MapToDto(user) };
+            return Result<IEnumerable<UserDto>>.Success(users, "Usuário encontrado");
         }
         catch (Exception ex)
         {
             // TODO: Implementar logging aqui
-            return Result<IEnumerable<UserDto>>.Failure($"Erro ao buscar usuários por email: {ex.Message}");
+            return Result<IEnumerable<UserDto>>.Failure($"Erro ao buscar usuário por email: {ex.Message}");
         }
     }
 
     /// <summary>
     /// Verifica se email já está em uso
-    /// TODO: Implementar verificação de email duplicado
     /// </summary>
     public async Task<bool> EmailExistsAsync(
         string email,
@@ -246,17 +235,10 @@ public class UserService : IUserService
     {
         try
         {
-            var normalized = email.Trim().ToLower();
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return false;
-            }
-
-            return await _userRepository.EmailExistsAsync(normalized, cancellationToken);
+            return await _userRepository.EmailExistsAsync(email, cancellationToken);
         }
         catch
         {
-            // Em caso de erro, retornar false para não bloquear o fluxo
             // TODO: Implementar logging aqui
             return false;
         }
@@ -264,7 +246,6 @@ public class UserService : IUserService
 
     /// <summary>
     /// Mapeia entidade User para UserDto
-    /// EXEMPLO: Padrão de mapeamento manual (pode usar AutoMapper se preferir)
     /// </summary>
     private static UserDto MapToDto(User user)
     {
@@ -274,7 +255,10 @@ public class UserService : IUserService
             Name = user.Name,
             Email = user.Email,
             Phone = user.Phone,
+            CPF = user.CPF,
+            BirthDate = user.BirthDate,
             IsEmailVerified = user.IsEmailVerified,
+            IsFirstAccess = user.IsFirstAccess,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
