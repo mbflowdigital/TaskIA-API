@@ -74,19 +74,27 @@ public class UserService : IUserService
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        // 1. Buscar no repositório
-        var user = await _userRepository.GetByIdAsync(id, cancellationToken);
-
-        // 2. Validar se encontrou
-        if (user == null)
+        try
         {
-            return Result<UserDto>.Failure(
-                $"Usuário não encontrado. Não foi encontrado usuário com ID {id}");
-        }
+            // 1. Buscar no repositório
+            var user = await _userRepository.GetByIdAsync(id, cancellationToken);
 
-        // 3. Mapear para DTO e retornar
-        var userDto = MapToDto(user);
-        return Result<UserDto>.Success(userDto);
+            // 2. Validar se encontrou
+            if (user == null)
+            {
+                return Result<UserDto>.Failure(
+                    $"Usuário não encontrado. Não foi encontrado usuário com ID {id}");
+            }
+
+            // 3. Mapear para DTO e retornar
+            var userDto = MapToDto(user);
+            return Result<UserDto>.Success(userDto);
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<UserDto>.Failure($"Erro ao buscar usuário: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -96,16 +104,24 @@ public class UserService : IUserService
     public async Task<Result<IEnumerable<UserDto>>> GetAllAsync(
         CancellationToken cancellationToken = default)
     {
-        // 1. Buscar todos no repositório
-        var users = await _userRepository.GetAllAsync(cancellationToken);
+        try
+        {
+            // 1. Buscar todos no repositório
+            var users = await _userRepository.GetAllAsync(cancellationToken);
 
-        // 2. Mapear para lista de DTOs
-        var userDtos = users.Select(MapToDto).ToList();
+            // 2. Mapear para lista de DTOs
+            var userDtos = users.Select(MapToDto).ToList();
 
-        // 3. Retornar com mensagem de sucesso
-        return Result<IEnumerable<UserDto>>.Success(
-            userDtos,
-            $"{userDtos.Count} usuário(s) encontrado(s)");
+            // 3. Retornar com mensagem de sucesso
+            return Result<IEnumerable<UserDto>>.Success(
+                userDtos,
+                $"{userDtos.Count} usuário(s) encontrado(s)");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<IEnumerable<UserDto>>.Failure($"Erro ao listar usuários: {ex.Message} | StackTrace: {ex.StackTrace}");
+        }
     }
 
     /// <summary>
@@ -195,21 +211,29 @@ public class UserService : IUserService
         string email,
         CancellationToken cancellationToken = default)
     {
-        var normalized = email.Trim().ToLower();
-        if (string.IsNullOrWhiteSpace(normalized))
+        try
         {
-            return Result<IEnumerable<UserDto>>.Failure("Email é obrigatório");
+            var normalized = email.Trim().ToLower();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return Result<IEnumerable<UserDto>>.Failure("Email é obrigatório");
+            }
+
+            // Busca por correspondência parcial
+            var users = await _userRepository.FindAsync(
+                u => u.IsActive && u.Email.Contains(normalized),
+                cancellationToken);
+
+            var userDtos = users.Select(MapToDto).ToList();
+            return Result<IEnumerable<UserDto>>.Success(
+                userDtos,
+                $"{userDtos.Count} usuário(s) encontrado(s)");
         }
-
-        // Busca por correspondência parcial
-        var users = await _userRepository.FindAsync(
-            u => u.IsActive && u.Email.Contains(normalized),
-            cancellationToken);
-
-        var userDtos = users.Select(MapToDto).ToList();
-        return Result<IEnumerable<UserDto>>.Success(
-            userDtos,
-            $"{userDtos.Count} usuário(s) encontrado(s)");
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<IEnumerable<UserDto>>.Failure($"Erro ao buscar usuários por email: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -220,13 +244,22 @@ public class UserService : IUserService
         string email,
         CancellationToken cancellationToken = default)
     {
-        var normalized = email.Trim().ToLower();
-        if (string.IsNullOrWhiteSpace(normalized))
+        try
         {
+            var normalized = email.Trim().ToLower();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            return await _userRepository.EmailExistsAsync(normalized, cancellationToken);
+        }
+        catch
+        {
+            // Em caso de erro, retornar false para não bloquear o fluxo
+            // TODO: Implementar logging aqui
             return false;
         }
-
-        return await _userRepository.EmailExistsAsync(normalized, cancellationToken);
     }
 
     /// <summary>

@@ -1,10 +1,19 @@
 using Application.Core;
 using CrossCutting.Extensions;
 using Infrastructure;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configurar Forwarded Headers (CRÍTICO para HTTPS atrás de proxy)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Configurar CORS para frontends (Angular/React)
 builder.Services.AddCors(options =>
@@ -44,15 +53,15 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "TaskIA API",
         Version = "v1",
-        Description = "API construÃ­da com Clean Architecture e princÃ­pios SOLID",
+        Description = "API construída com Clean Architecture e princípios SOLID",
         Contact = new OpenApiContact
         {
-            Name = "Seu Nome/Equipe",
-            Email = "email@exemplo.com"
+            Name = "Equipe TaskIA",
+            Email = "contato@taskia.com"
         }
     });
 
-    // Incluir comentÃ¡rios XML na documentaÃ§Ã£o
+    // Incluir comentários XML na documentação
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -63,24 +72,24 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Configure o pipeline HTTP
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "TaskIA API v1");
-        c.RoutePrefix = string.Empty; // Swagger na raiz
-    });
-}
+// CRÍTICO: UseForwardedHeaders DEVE vir PRIMEIRO
+app.UseForwardedHeaders();
 
-// CORS - Deve vir ANTES de UseAuthorization
+// Swagger disponível em TODOS os ambientes
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "TaskIA API v1");
+    c.RoutePrefix = string.Empty; // Swagger na raiz
+    c.DocumentTitle = "TaskIA API - Documentação";
+});
+
+// CORS
 app.UseCors("AllowAngular");
 
-// Middleware de exceÃ§Ãµes (CrossCutting)
-app.UseCrossCutting();
+// Middleware de exceções
+app.UseCrossCutting(app.Environment);
 
-app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 

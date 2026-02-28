@@ -21,6 +21,9 @@ public class User : BaseEntity
 
     public bool IsEmailVerified { get; set; }
 
+    // Relacionamento com Projects (um usuário pode ter vários projetos)
+    public virtual ICollection<Project> Projects { get; set; } = new List<Project>();
+
     // Construtor público
     public User() { }
 
