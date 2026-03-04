@@ -1,6 +1,5 @@
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
-using Application.Core.Services;
 using Domain.Common;
 using Domain.Entities;
 using Domain.Interfaces;
@@ -10,22 +9,27 @@ namespace Application.Core.Services;
 /// <summary>
 /// Service de Users
 /// Contém toda a lógica de negócio relacionada a usuários
-/// Implementa IUserService seguindo Dependency Inversion Principle
-/// Este é um EXEMPLO de Service para os desenvolvedores seguirem o padrão
+/// Novas senhas sempre usarão BCrypt
 /// </summary>
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public UserService(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public UserService(
+        IUserRepository userRepository, 
+        IUnitOfWork unitOfWork,
+        IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _passwordHasher = passwordHasher;
     }
 
     /// <summary>
     /// Cria um novo usuário
+    /// Senha padrão será hasheada com BCrypt
     /// </summary>
     public async Task<Result<UserDto>> CreateAsync(
         CreateUserRequest request,
@@ -59,9 +63,9 @@ public class UserService : IUserService
                 BirthDate = request.BirthDate
             };
 
-            // 4. Hash da senha padrão (data de nascimento: ddMMyyyy)
+            // 4. Hash da senha padrão (data de nascimento) 
             var defaultPassword = user.GetDefaultPassword();
-            user.PasswordHash = AuthService.HashPassword(defaultPassword);
+            user.PasswordHash = _passwordHasher.HashPassword(defaultPassword);
 
             // 5. Adicionar ao repositório
             await _userRepository.AddAsync(user, cancellationToken);

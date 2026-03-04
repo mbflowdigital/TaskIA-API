@@ -1,6 +1,7 @@
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Application.Controllers;
@@ -11,6 +12,7 @@ namespace Application.Controllers;
 /// Seguindo Dependency Inversion Principle (SOLID)
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class UsersController : ControllerBase
