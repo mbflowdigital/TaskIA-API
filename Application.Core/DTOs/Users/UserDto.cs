@@ -9,7 +9,10 @@ public record UserDto
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Phone { get; init; }
+    public string CPF { get; init; } = string.Empty;
+    public DateTime BirthDate { get; init; }
     public bool IsEmailVerified { get; init; }
+    public bool IsFirstAccess { get; init; }
     public bool IsActive { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
@@ -21,6 +24,8 @@ public record UserDto
 public record CreateUserRequest(
     string Name,
     string Email,
+    string CPF,
+    DateTime BirthDate,
     string? Phone = null
 );
 

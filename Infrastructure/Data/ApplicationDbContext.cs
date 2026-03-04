@@ -15,13 +15,27 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; } = null!;
-    // TODO: Adicionar outros DbSets conforme necessário
+    public DbSet<Project> Projects { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // TODO: Configurações adicionais se necessário (índices, query filters, etc)
+        // Configurar relacionamento User -> Projects
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Projects)
+            .WithOne(p => p.User)
+            .HasForeignKey(p => p.UserId)
+            .OnDelete(DeleteBehavior.Restrict); // Não permite deletar usuário se tiver projetos
+
+        // Índices para performance
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.UserId);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.Status);
+
+        // Configurações adicionais se necessário
         // Exemplo: modelBuilder.Entity<User>().HasIndex(e => e.Email).IsUnique();
     }
 }
