@@ -30,7 +30,19 @@ public interface IAuthService
     /// </summary>
     Task<Result> LogoutAsync(string token, CancellationToken cancellationToken = default);
 
-    // TODO: Métodos futuros
-    // Task<Result<LoginResponse>> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
-    // Task<Result> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Renova token JWT usando refresh token
+    /// </summary>
+    Task<Result<LoginResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Troca senha do usuário autenticado
+    /// </summary>
+    Task<Result> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reseta senha usando CPF (esqueceu a senha)
+    /// Aplica mesmas validações de troca de senha
+    /// </summary>
+    Task<Result> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default);
 }
