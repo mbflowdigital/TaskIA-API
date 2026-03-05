@@ -1,4 +1,5 @@
 using Application.Core.DTOs.Users;
+using Domain.Enums;
 using FluentValidation;
 
 namespace Application.Core.Validators.Users;
@@ -33,6 +34,10 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
         RuleFor(x => x.Phone)
             .MaximumLength(20).WithMessage("Telefone deve ter no máximo 20 caracteres")
             .When(x => !string.IsNullOrEmpty(x.Phone));
+
+        RuleFor(x => x.Role)
+            .Must(role => string.IsNullOrWhiteSpace(role) || Enum.TryParse<UserRole>(role, true, out _))
+            .WithMessage("Perfil inválido. Valores aceitos: ADM_MASTER, ADM, USER");
     }
 }
 

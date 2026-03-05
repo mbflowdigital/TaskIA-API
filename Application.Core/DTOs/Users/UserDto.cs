@@ -11,6 +11,7 @@ public record UserDto
     public string? Phone { get; init; }
     public string CPF { get; init; } = string.Empty;
     public DateTime BirthDate { get; init; }
+    public string Role { get; init; } = "USER";
     public bool IsEmailVerified { get; init; }
     public bool IsFirstAccess { get; init; }
     public bool IsActive { get; init; }
@@ -26,7 +27,8 @@ public record CreateUserRequest(
     string Email,
     string CPF,
     DateTime BirthDate,
-    string? Phone = null
+    string? Phone = null,
+    string? Role = null
 );
 
 /// <summary>

@@ -16,6 +16,11 @@ public class UserRepository : Repository<User>, IUserRepository
     {
     }
 
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.AnyAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Busca usuário por email
     /// </summary>

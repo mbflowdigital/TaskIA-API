@@ -1,15 +1,18 @@
 using Application.Core.DTOs.Auth;
+using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Application.Controllers;
 
 /// <summary>
-/// Controller de Autenticação
-/// Gerencia operações de login e autenticação de usuários
-/// Senha padrão: Data de nascimento no formato ddMMyyyy (ex: 25111998)
-/// Preparado para evolução futura (JWT, refresh token, etc)
+/// Controller de Autenticaï¿½ï¿½o
+/// Gerencia operaï¿½ï¿½es de login e autenticaï¿½ï¿½o de usuï¿½rios
+/// Senha padrï¿½o: Data de nascimento no formato ddMMyyyy (ex: 25111998)
+/// Preparado para evoluï¿½ï¿½o futura (JWT, refresh token, etc)
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -24,8 +27,8 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Realiza login do usuário com CPF e senha
-    /// Senha padrão: Data de nascimento (ddMMyyyy - ex: 25111998)
+    /// Realiza login do usuï¿½rio com CPF e senha
+    /// Senha padrï¿½o: Data de nascimento (ddMMyyyy - ex: 25111998)
     /// </summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(Result<LoginResponse>), StatusCodes.Status200OK)]
@@ -53,7 +56,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Verifica se CPF já está cadastrado
+    /// Verifica se CPF jï¿½ estï¿½ cadastrado
     /// </summary>
     [HttpGet("check-cpf")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -63,17 +66,61 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(cpf))
         {
-            return BadRequest(new { exists = false, message = "CPF inválido" });
+            return BadRequest(new { exists = false, message = "CPF invï¿½lido" });
         }
 
         var exists = await _authService.CPFExistsAsync(cpf, cancellationToken);
-        return Ok(new { exists, message = exists ? "CPF já cadastrado" : "CPF disponível" });
+        return Ok(new { exists, message = exists ? "CPF jï¿½ cadastrado" : "CPF disponï¿½vel" });
+    }
+
+    /// <summary>
+    /// Registra novo usuÃ¡rio (cria conta com senha padrÃ£o)
+    /// Se o JWT estiver presente, valida permissÃµes do criador.
+    /// ADM_MASTER â†’ pode criar ADM e USER | ADM â†’ pode criar USER | USER â†’ proibido
+    /// </summary>
+    [HttpPost("register")]
+    [ProducesResponseType(typeof(Result<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Register(
+        [FromBody] RegisterRequest request,
+        CancellationToken cancellationToken)
+    {
+        // Ler role das Claims (disponÃ­vel quando JWT estiver implementado)
+        UserRole? createdByRole = null;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (!string.IsNullOrWhiteSpace(roleClaim) &&
+            Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var claimRole))
+        {
+            createdByRole = claimRole;
+            if (claimRole == UserRole.USER)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    Result.Failure("UsuÃ¡rios padrÃ£o nÃ£o podem criar outros usuÃ¡rios."));
+        }
+
+        var result = await _authService.RegisterAsync(request, createdByRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Conclui o onboarding do ADM: cria a empresa e vincula ao usuÃ¡rio.
+    /// Deve ser chamado apÃ³s o primeiro login de um ADM sem empresa.
+    /// </summary>
+    [HttpPost("onboarding")]
+    [ProducesResponseType(typeof(Result<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Onboarding(
+        [FromBody] OnboardingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.OnboardingAsync(request, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
     // TODO: Endpoints futuros
     // POST /api/auth/refresh-token
     // POST /api/auth/logout
-    // POST /api/auth/change-password (usuário logado)
+    // POST /api/auth/change-password (usuï¿½rio logado)
     // POST /api/auth/forgot-password
     // POST /api/auth/reset-password
 }

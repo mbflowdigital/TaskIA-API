@@ -3,6 +3,7 @@ using Application.Core.Interfaces.Services;
 using Application.Core.Services;
 using Domain.Common;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 
 namespace Application.Core.Services;
@@ -33,6 +34,8 @@ public class UserService : IUserService
     {
         try
         {
+            var anyUsers = await _userRepository.AnyAsync(cancellationToken);
+
             // 1. Validar se email já existe
             var emailExists = await _userRepository.EmailExistsAsync(request.Email, cancellationToken);
             if (emailExists)
@@ -50,13 +53,29 @@ public class UserService : IUserService
             }
 
             // 3. Criar entidade User
+            var targetRole = UserRole.USER;
+            if (!string.IsNullOrWhiteSpace(request.Role))
+            {
+                if (!Enum.TryParse<UserRole>(request.Role, true, out targetRole))
+                {
+                    return Result<UserDto>.Failure("Perfil inválido. Valores aceitos: ADM_MASTER, ADM, USER");
+                }
+            }
+
+            // Regra de bootstrap: primeiro usuário do sistema vira ADM_MASTER
+            if (!anyUsers)
+            {
+                targetRole = UserRole.ADM_MASTER;
+            }
+
             var user = new User
             {
                 Name = request.Name,
                 Email = request.Email.ToLower(),
                 Phone = request.Phone,
                 CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
-                BirthDate = request.BirthDate
+                BirthDate = request.BirthDate,
+                Role = targetRole
             };
 
             // 4. Hash da senha padrão (data de nascimento: ddMMyyyy)
@@ -257,6 +276,7 @@ public class UserService : IUserService
             Phone = user.Phone,
             CPF = user.CPF,
             BirthDate = user.BirthDate,
+            Role = user.Role.ToString(),
             IsEmailVerified = user.IsEmailVerified,
             IsFirstAccess = user.IsFirstAccess,
             IsActive = user.IsActive,

@@ -1,7 +1,9 @@
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Application.Controllers;
 
@@ -37,6 +39,16 @@ public class UsersController : ControllerBase
         [FromBody] CreateUserRequest request,
         CancellationToken cancellationToken)
     {
+        // Verificar permissão via Claims (ativo quando JWT estiver implementado)
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (!string.IsNullOrWhiteSpace(roleClaim) &&
+            Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var claimRole) &&
+            claimRole == UserRole.USER)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Usuários padrão não podem criar outros usuários."));
+        }
+
         var result = await _userService.CreateAsync(request, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
