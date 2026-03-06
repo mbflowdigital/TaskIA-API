@@ -1,17 +1,19 @@
 using Application.Core.DTOs.Auth;
+using Application.Core.DTOs.Users;
 using Domain.Common;
+using Domain.Enums;
 
 namespace Application.Core.Interfaces.Services;
 
 /// <summary>
-/// Interface do serviço de autenticação
-/// Define contrato para lógica de autenticação de usuários
-/// Preparado para evolução futura (JWT, refresh token, etc)
+/// Interface do serviï¿½o de autenticaï¿½ï¿½o
+/// Define contrato para lï¿½gica de autenticaï¿½ï¿½o de usuï¿½rios
+/// Preparado para evoluï¿½ï¿½o futura (JWT, refresh token, etc)
 /// </summary>
 public interface IAuthService
 {
     /// <summary>
-    /// Autentica usuário com CPF e senha
+    /// Autentica usuï¿½rio com CPF e senha
     /// </summary>
     Task<Result<LoginResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
 
@@ -26,7 +28,7 @@ public interface IAuthService
     Task<Result<LoginResponse>> ChangePasswordFirstAccessAsync(ChangePasswordFirstAccessRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Realiza logout do usuário revogando o token JWT
+    /// Realiza logout do usuÃ¡rio revogando o token JWT
     /// </summary>
     Task<Result> LogoutAsync(string token, CancellationToken cancellationToken = default);
 
@@ -36,13 +38,31 @@ public interface IAuthService
     Task<Result<LoginResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Troca senha do usuário autenticado
+    /// Troca senha do usuÃ¡rio autenticado
     /// </summary>
     Task<Result> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reseta senha usando CPF (esqueceu a senha)
-    /// Aplica mesmas validações de troca de senha
+    /// Aplica mesmas validaÃ§Ãµes de troca de senha
     /// </summary>
     Task<Result> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Registra/cria um novo usuÃ¡rio.
+    /// ObservaÃ§Ã£o: validaÃ§Ã£o de permissÃ£o (403) deve ser feita no Controller com base nas Claims.
+    /// </summary>
+    Task<Result<UserDto>> RegisterAsync(
+        RegisterRequest request,
+        UserRole? createdByRole,
+        CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Completa o onboarding do ADM: cria empresa e vincula ao usuÃ¡rio.
+    /// </summary>
+    Task<Result<LoginResponse>> OnboardingAsync(
+        OnboardingRequest request,
+        CancellationToken cancellationToken = default);
+    // TODO: Mï¿½todos futuros
+    // Task<Result<LoginResponse>> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+    // Task<Result> LogoutAsync(Guid userId, CancellationToken cancellationToken = default);
+    // Task<Result> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 }

@@ -6,11 +6,13 @@ namespace Application.Core.DTOs.Users;
 public record UserDto
 {
     public Guid Id { get; init; }
+    public Guid? CompanyId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Phone { get; init; }
     public string CPF { get; init; } = string.Empty;
     public DateTime BirthDate { get; init; }
+    public string Role { get; init; } = "USER";
     public bool IsEmailVerified { get; init; }
     public bool IsFirstAccess { get; init; }
     public bool IsActive { get; init; }
@@ -26,7 +28,8 @@ public record CreateUserRequest(
     string Email,
     string CPF,
     DateTime BirthDate,
-    string? Phone = null
+    string? Phone = null,
+    string? Role = null
 );
 
 /// <summary>

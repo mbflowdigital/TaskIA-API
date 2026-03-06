@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Domain.Enums;
 
 namespace Domain.Entities;
 
@@ -30,9 +31,16 @@ public class User : BaseEntity
     [MaxLength(256)]
     public string PasswordHash { get; set; } = string.Empty;
 
+    [Required]
+    public UserRole Role { get; set; } = UserRole.USER;
+
     public bool IsEmailVerified { get; set; }
 
     public bool IsFirstAccess { get; set; } = true;
+
+    // Relacionamento com Company (ADM_MASTER não tem empresa)
+    public Guid? CompanyId { get; set; }
+    public virtual Company? Company { get; set; }
 
     // Relacionamento com Projects (um usuário pode ter vários projetos)
     public virtual ICollection<Project> Projects { get; set; } = new List<Project>();

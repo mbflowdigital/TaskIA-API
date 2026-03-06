@@ -33,11 +33,17 @@ public class Project : BaseEntity
     [ForeignKey(nameof(UserId))]
     public virtual User? User { get; set; }
 
-    // Construtor público
+    // Relacionamento com Company (escopo multi-tenant)
+    public Guid? CompanyId { get; set; }
+
+    [ForeignKey(nameof(CompanyId))]
+    public virtual Company? Company { get; set; }
+
+    // Construtor pï¿½blico
     public Project() { }
 
     /// <summary>
-    /// Atualiza informações básicas do projeto
+    /// Atualiza informaï¿½ï¿½es bï¿½sicas do projeto
     /// </summary>
     public void UpdateInfo(string name, string? objective, string? description, DateTime? startDate, DateTime? endDate)
     {
@@ -62,7 +68,7 @@ public class Project : BaseEntity
     }
 
     /// <summary>
-    /// Inativa o projeto (altera status para Inactive, mas mantém IsActive = true)
+    /// Inativa o projeto (altera status para Inactive, mas mantï¿½m IsActive = true)
     /// </summary>
     public void SetInactive()
     {
@@ -81,7 +87,7 @@ public class Project : BaseEntity
     }
 
     /// <summary>
-    /// Valida se o status é válido
+    /// Valida se o status ï¿½ vï¿½lido
     /// </summary>
     private static bool IsValidStatus(string status)
     {

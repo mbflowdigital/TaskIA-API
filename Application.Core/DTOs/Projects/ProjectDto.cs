@@ -6,6 +6,8 @@ namespace Application.Core.DTOs.Projects;
 public class ProjectDto
 {
     public Guid Id { get; set; }
+    public Guid? CompanyId { get; set; }
+    public string? CompanyName { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Objective { get; set; }
     public string? Description { get; set; }
@@ -13,14 +15,14 @@ public class ProjectDto
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public Guid UserId { get; set; }
-    public string? UserName { get; set; } // Nome do usuário que criou
+    public string? UserName { get; set; } // Nome do usuï¿½rio que criou
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>
-/// DTO para criação de novo Project
+/// DTO para criaï¿½ï¿½o de novo Project
 /// </summary>
 public class CreateProjectRequest
 {
@@ -30,11 +32,11 @@ public class CreateProjectRequest
     public string Status { get; set; } = "Draft";
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
-    public Guid UserId { get; set; } // Obrigatório: quem está criando
+    public Guid UserId { get; set; } // Obrigatï¿½rio: quem estï¿½ criando
 }
 
 /// <summary>
-/// DTO para atualização de Project
+/// DTO para atualizaï¿½ï¿½o de Project
 /// </summary>
 public class UpdateProjectRequest
 {
@@ -45,11 +47,11 @@ public class UpdateProjectRequest
     public string Status { get; set; } = string.Empty;
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
-    // UserId não pode ser alterado (quem criou permanece)
+    // UserId nï¿½o pode ser alterado (quem criou permanece)
 }
 
 /// <summary>
-/// DTO para alteração de status do projeto (Active/Inactive)
+/// DTO para alteraï¿½ï¿½o de status do projeto (Active/Inactive)
 /// </summary>
 public class ChangeStatusRequest
 {

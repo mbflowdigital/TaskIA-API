@@ -1,17 +1,19 @@
 using Application.Core.DTOs.Auth;
+using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Microsoft.AspNetCore.Authorization;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace Application.Controllers;
 
 /// <summary>
-/// Controller de AutenticaÁ„o
-/// Gerencia operaÁıes de login, logout e autenticaÁ„o de usu·rios
-/// Senha padr„o: Data de nascimento no formato ddMMyyyy (ex: 25111998)
-/// Preparado para evoluÁ„o futura (JWT, refresh token, etc)
+/// Controller de Autentica√ß√£o
+/// Gerencia opera√ß√µes de login, logout e autentica√ß√£o de usu√°rios
+/// Senha padr√£o: Data de nascimento no formato ddMMyyyy (ex: 25111998)
+/// Preparado para evolu√ß√£o futura (JWT, refresh token, etc)
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -26,8 +28,8 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Realiza login do usu·rio com CPF e senha
-    /// Senha padr„o: Data de nascimento (ddMMyyyy - ex: 25111998)
+    /// Realiza login do usuÔøΩrio com CPF e senha
+    /// Senha padrÔøΩo: Data de nascimento (ddMMyyyy - ex: 25111998)
     /// </summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(Result<LoginResponse>), StatusCodes.Status200OK)]
@@ -61,7 +63,7 @@ public class AuthController : ControllerBase
     /// <param name="request">Token expirado e refresh token</param>
     /// <param name="cancellationToken">Token de cancelamento</param>
     /// <response code="200">Token renovado com sucesso</response>
-    /// <response code="400">Token inv·lido ou refresh token inv·lido</response>
+    /// <response code="400">Token inv√°lido ou refresh token inv√°lido</response>
     [HttpPost("refresh-token")]
     [ProducesResponseType(typeof(Result<LoginResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
@@ -74,15 +76,15 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Troca senha do usu·rio autenticado
-    /// Requer autenticaÁ„o com Bearer token
-    /// Usu·rio deve fornecer senha atual e nova senha
+    /// Troca senha do usu√°rio autenticado
+    /// Requer autentica√ß√£o com Bearer token
+    /// Usu√°rio deve fornecer senha atual e nova senha
     /// </summary>
     /// <param name="request">Dados para troca de senha (exceto UserId que vem do token)</param>
     /// <param name="cancellationToken">Token de cancelamento</param>
     /// <response code="200">Senha alterada com sucesso</response>
-    /// <response code="400">Dados inv·lidos ou senha atual incorreta</response>
-    /// <response code="401">Token n„o fornecido ou inv·lido</response>
+    /// <response code="400">Dados inv√°lidos ou senha atual incorreta</response>
+    /// <response code="401">Token n√£o fornecido ou inv√°lido</response>
     [HttpPost("change-password")]
     [Authorize]
     [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
@@ -100,8 +102,8 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Esqueceu a senha
     /// </summary>
-    /// <response code="200">SolicitaÁ„o de redefiniÁ„o de senha enviada com sucesso</response>
-    /// <response code="400">CPF inv·lido ou erro ao processar solicitaÁ„o</response>
+    /// <response code="200">Solicita√ß√£o de redefini√ß√£o de senha enviada com sucesso</response>
+    /// <response code="400">CPF inv√°lido ou erro ao processar solicita√ß√£o</response>
     [HttpPost("forgot-password")]
     [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
@@ -115,10 +117,10 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Verifica se CPF j· est· cadastrado
+    /// Verifica se CPF j√° est√° cadastrado
     /// </summary>
-    /// <response code="200">VerificaÁ„o realizada com sucesso</response>
-    /// <response code="400">CPF inv·lido</response>
+    /// <response code="200">Verifica√ß√£o realizada com sucesso</response>
+    /// <response code="400">CPF inv√°lido</response>
     [HttpGet("check-cpf")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> CheckCPF(
@@ -127,21 +129,65 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(cpf))
         {
-            return BadRequest(new { exists = false, message = "CPF inv·lido" });
+            return BadRequest(new { exists = false, message = "CPF invÔøΩlido" });
         }
 
         var exists = await _authService.CPFExistsAsync(cpf, cancellationToken);
-        return Ok(new { exists, message = exists ? "CPF j· cadastrado" : "CPF disponÌvel" });
+        return Ok(new { exists, message = exists ? "CPF jÔøΩ cadastrado" : "CPF disponÔøΩvel" });
     }
 
     /// <summary>
-    /// Realiza logout do usu·rio (revoga o token JWT)
-    /// Requer autenticaÁ„o com Bearer token
-    /// Token revogado È adicionado na blacklist e n„o pode mais ser usado
+    /// Registra novo usu√°rio (cria conta com senha padr√£o)
+    /// Se o JWT estiver presente, valida permiss√µes do criador.
+    /// ADM_MASTER ‚Üí pode criar ADM e USER | ADM ‚Üí pode criar USER | USER ‚Üí proibido
+    /// </summary>
+    [HttpPost("register")]
+    [ProducesResponseType(typeof(Result<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Register(
+        [FromBody] RegisterRequest request,
+        CancellationToken cancellationToken)
+    {
+        // Ler role das Claims (dispon√≠vel quando JWT estiver implementado)
+        UserRole? createdByRole = null;
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (!string.IsNullOrWhiteSpace(roleClaim) &&
+            Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var claimRole))
+        {
+            createdByRole = claimRole;
+            if (claimRole == UserRole.USER)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    Result.Failure("Usu√°rios padr√£o n√£o podem criar outros usu√°rios."));
+        }
+
+        var result = await _authService.RegisterAsync(request, createdByRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Conclui o onboarding do ADM: cria a empresa e vincula ao usu√°rio.
+    /// Deve ser chamado ap√≥s o primeiro login de um ADM sem empresa.
+    /// </summary>
+    [HttpPost("onboarding")]
+    [ProducesResponseType(typeof(Result<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Onboarding(
+        [FromBody] OnboardingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.OnboardingAsync(request, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Realiza logout do usu√°rio (revoga o token JWT)
+    /// Requer autentica√ß√£o com Bearer token
+    /// Token revogado √© adicionado na blacklist e n√£o pode mais ser usado
     /// </summary>
     /// <response code="200">Logout realizado com sucesso</response>
-    /// <response code="400">Token inv·lido ou erro ao realizar logout</response>
-    /// <response code="401">Token n„o fornecido ou inv·lido</response>
+    /// <response code="400">Token inv√°lido ou erro ao realizar logout</response>
+    /// <response code="401">Token n√£o fornecido ou inv√°lido</response>
     [HttpPost("logout")]
     [Authorize]
     [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
@@ -154,7 +200,7 @@ public class AuthController : ControllerBase
         
         if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            return Unauthorized(Result.Failure("Token n„o fornecido no header Authorization"));
+            return Unauthorized(Result.Failure("Token n√£o fornecido no header Authorization"));
         }
 
         var token = authHeader["Bearer ".Length..].Trim();
@@ -163,6 +209,5 @@ public class AuthController : ControllerBase
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
-    // TODO: Endpoints futuros
-    // POST /api/auth/reset-password
+ 
 }

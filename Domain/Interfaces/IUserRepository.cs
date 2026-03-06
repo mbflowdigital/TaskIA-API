@@ -9,6 +9,12 @@ namespace Domain.Interfaces;
 public interface IUserRepository : IRepository<User>
 {
     /// <summary>
+    /// Verifica se existe ao menos um usuário cadastrado
+    /// (usado para regra de bootstrap: primeiro usuário vira ADM_MASTER)
+    /// </summary>
+    Task<bool> AnyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Busca usuário por email
     /// </summary>
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
@@ -27,6 +33,11 @@ public interface IUserRepository : IRepository<User>
     /// Verifica se CPF já existe
     /// </summary>
     Task<bool> CPFExistsAsync(string cpf, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lista usuários de uma empresa específica
+    /// </summary>
+    Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
 
     // TODO: Adicionar outros métodos específicos conforme necessário
     // Exemplo: Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);

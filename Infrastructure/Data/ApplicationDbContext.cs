@@ -1,4 +1,5 @@
 using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Data;
@@ -16,10 +17,37 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Project> Projects { get; set; } = null!;
+    public DbSet<Company> Companies { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Role)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(UserRole.USER);
+
+        // Relacionamento Company -> Users (1:N)
+        modelBuilder.Entity<Company>()
+            .HasMany(c => c.Users)
+            .WithOne(u => u.Company)
+            .HasForeignKey(u => u.CompanyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Company>()
+            .HasIndex(c => c.Name);
+
+        // Relacionamento Company -> Projects (1:N)
+        modelBuilder.Entity<Company>()
+            .HasMany(c => c.Projects)
+            .WithOne(p => p.Company)
+            .HasForeignKey(p => p.CompanyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.CompanyId);
 
         // Configurar relacionamento User -> Projects
         modelBuilder.Entity<User>()

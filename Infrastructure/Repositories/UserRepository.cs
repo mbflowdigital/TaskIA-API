@@ -16,6 +16,11 @@ public class UserRepository : Repository<User>, IUserRepository
     {
     }
 
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.AnyAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Busca usuário por email
     /// </summary>
@@ -54,6 +59,17 @@ public class UserRepository : Repository<User>, IUserRepository
         
         return await _dbSet
             .AnyAsync(u => u.CPF == normalizedCPF, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lista usuários de uma empresa específica
+    /// </summary>
+    public async Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(u => u.CompanyId == companyId)
+            .OrderBy(u => u.Name)
+            .ToListAsync(cancellationToken);
     }
 
     // TODO: Exemplo de método específico que pode ser adicionado

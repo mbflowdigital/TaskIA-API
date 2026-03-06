@@ -56,6 +56,7 @@ public static class DependencyInjection
         // Registrar repositórios específicos
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<ICompanyRepository, CompanyRepository>();
         // TODO: Adicionar outros repositórios específicos aqui
         // services.AddScoped<IProductRepository, ProductRepository>();
 
