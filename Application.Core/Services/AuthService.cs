@@ -5,6 +5,8 @@ using Domain.Common;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Application.Core.Services;
 
@@ -238,7 +240,7 @@ public class AuthService : IAuthService
                 IsFirstAccess = user.IsFirstAccess,
                 Token = token,
                 TokenExpiration = tokenExpiration,
-                RefreshToken = refreshToken
+                RefreshToken = refreshToken,
                  Role = user.Role.ToString(),
             };
 
