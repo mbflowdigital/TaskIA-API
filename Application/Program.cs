@@ -1,6 +1,7 @@
 using Application.Core;
 using CrossCutting.Extensions;
 using Infrastructure;
+using Infrastructure.ConfigurationJwtToken;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -39,13 +40,13 @@ builder.Services.AddCors(options =>
 
 // Adicionar camadas ao container de DI
 builder.Services.AddApplicationCore();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration); // Já configura JWT Authentication
 builder.Services.AddCrossCutting();
 
 // Configurar Controllers
 builder.Services.AddControllers();
 
-// Configurar Swagger/OpenAPI
+// Configurar Swagger/OpenAPI com suporte JWT Bearer
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -53,11 +54,37 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "TaskIA API",
         Version = "v1",
-        Description = "API construída com Clean Architecture e princípios SOLID",
+        Description = "API construída com Clean Architecture, JWT Bearer Authentication e princípios SOLID",
         Contact = new OpenApiContact
         {
             Name = "Equipe TaskIA",
             Email = "contato@taskia.com"
+        }
+    });
+
+    // Configurar autenticação Bearer no Swagger
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header usando Bearer scheme. Exemplo: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
         }
     });
 
@@ -90,7 +117,12 @@ app.UseCors("AllowAngular");
 // Middleware de exceções
 app.UseCrossCutting(app.Environment);
 
-app.UseAuthorization();
+app.UseAuthentication(); // 1º - Valida o token JWT
+
+app.UseMiddleware<TokenBlacklistMiddleware>(); // 2º - Verifica se token está revogado
+
+app.UseAuthorization(); // 3º - Verifica permissões/claims
+
 app.MapControllers();
 
 app.Run();

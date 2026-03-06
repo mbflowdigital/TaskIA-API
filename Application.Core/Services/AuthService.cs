@@ -1,31 +1,44 @@
-using Application.Core.DTOs.Auth;
+﻿using Application.Core.DTOs.Auth;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Interfaces;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Application.Core.Services;
 
 /// <summary>
-/// Service de Autentica��o
-/// Cont�m toda a l�gica de autentica��o de usu�rios
-/// Senha padr�o: Data de nascimento no formato ddMMyyyy (ex: 25111998)
-/// Preparado para evolu��o futura (JWT, refresh token, hash bcrypt, etc)
+/// Service de Autenticação
+/// Contém toda a lógica de autenticação de usuários
+/// Senha padrão: Data de nascimento no formato ddMMyyyy (ex: 25111998)
+/// 
+/// MIGRAÇÃO HÍBRIDA SHA256 → BCrypt:
+/// - Detecta automaticamente o formato do hash
+/// - Migra para BCrypt no próximo login bem-sucedido
+/// - Não requer reset de senhas dos usuários
 /// </summary>
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IJwtTokenService _jwtTokenService;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public AuthService(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public AuthService(
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IJwtTokenService jwtTokenService,
+        IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _jwtTokenService = jwtTokenService;
+        _passwordHasher = passwordHasher;
     }
 
+
+
     /// <summary>
-    /// Autentica usu�rio com CPF e senha
+    /// Autentica usuário com CPF e senha
+    /// Migra automaticamente SHA256 → BCrypt no login bem-sucedido
     /// </summary>
     public async Task<Result<LoginResponse>> LoginAsync(
         LoginRequest request,
@@ -36,27 +49,47 @@ public class AuthService : IAuthService
             // 1. Normalizar CPF (remover caracteres especiais)
             var cpf = NormalizeCPF(request.CPF);
 
-            // 2. Buscar usu�rio por CPF
+            // 2. Buscar usuário por CPF
             var user = await _userRepository.GetByCPFAsync(cpf, cancellationToken);
             if (user == null)
             {
-                return Result<LoginResponse>.Failure("CPF ou senha inv�lidos");
+                return Result<LoginResponse>.Failure("CPF ou senha inválidos");
             }
 
-            // 3. Validar se usu�rio est� ativo
+            // 3. Validar se usuário está ativo
             if (!user.IsActive)
             {
-                return Result<LoginResponse>.Failure("Usu�rio desativado. Entre em contato com o suporte.");
+                return Result<LoginResponse>.Failure("Usuário desativado. Entre em contato com o suporte.");
             }
 
-            // 4. Validar senha
-            var passwordHash = HashPassword(request.Password);
-            if (user.PasswordHash != passwordHash)
+            // 4. Validar senha (suporta SHA256 legado e BCrypt)
+            if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
-                return Result<LoginResponse>.Failure("CPF ou senha inv�lidos");
+                return Result<LoginResponse>.Failure("CPF ou senha inválidos");
             }
 
-            // 5. Criar response
+            // 5. 🔄 MIGRAÇÃO AUTOMÁTICA: Se hash é SHA256, converter para BCrypt
+            var needsMigration = !_passwordHasher.IsBcryptHash(user.PasswordHash);
+            if (needsMigration)
+            {
+                var newPasswordHash = _passwordHasher.HashPassword(request.Password);
+                user.PasswordHash = newPasswordHash;
+
+                await _userRepository.UpdateAsync(user, cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
+            }
+
+            // 6. Gerar JWT Token e Refresh Token
+            var token = _jwtTokenService.GenerateAccessToken(
+                user.Id,
+                user.Email,
+                user.Name,
+                user.CPF);
+
+            var refreshToken = _jwtTokenService.GenerateRefreshToken();
+            var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
+
+            // 7. Criar response
             var response = new LoginResponse
             {
                 UserId = user.Id,
@@ -65,14 +98,13 @@ public class AuthService : IAuthService
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
-                
-                // TODO: Futuro - Gerar JWT token
-                Token = null,
-                TokenExpiration = null
+                Token = token,
+                TokenExpiration = tokenExpiration,
+                RefreshToken = refreshToken
             };
 
-            var message = user.IsFirstAccess 
-                ? "Login realizado com sucesso. Por favor, altere sua senha." 
+            var message = user.IsFirstAccess
+                ? "Login realizado com sucesso. Por favor, altere sua senha."
                 : "Login realizado com sucesso";
 
             return Result<LoginResponse>.Success(response, message);
@@ -85,7 +117,37 @@ public class AuthService : IAuthService
     }
 
     /// <summary>
+    /// Realiza logout do usuário revogando o token JWT
+    /// Usa JwtTokenService para gerenciar a blacklist
+    /// </summary>
+    public async Task<Result> LogoutAsync(string token, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return Result.Failure("Token não fornecido");
+            }
+
+            // Revogar token usando JwtTokenService
+            await _jwtTokenService.RevokeTokenAsync(token);
+
+            return Result.Success("Logout realizado com sucesso");
+        }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result.Failure($"Erro ao realizar logout: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Troca senha de primeiro acesso
+    /// Nova senha sempre será BCrypt
     /// </summary>
     public async Task<Result<LoginResponse>> ChangePasswordFirstAccessAsync(
         ChangePasswordFirstAccessRequest request,
@@ -96,49 +158,57 @@ public class AuthService : IAuthService
             // 1. Normalizar CPF
             var cpf = NormalizeCPF(request.CPF);
 
-            // 2. Buscar usu�rio por CPF
+            // 2. Buscar usuário por CPF
             var user = await _userRepository.GetByCPFAsync(cpf, cancellationToken);
             if (user == null)
             {
-                return Result<LoginResponse>.Failure("Usu�rio n�o encontrado");
+                return Result<LoginResponse>.Failure("Usuário não encontrado");
             }
 
-            // 3. Validar se usu�rio est� ativo
+            // 3. Validar se usuário está ativo
             if (!user.IsActive)
             {
-                return Result<LoginResponse>.Failure("Usu�rio desativado");
+                return Result<LoginResponse>.Failure("Usuário desativado");
             }
 
-            // 4. Validar senha atual
-            var currentPasswordHash = HashPassword(request.CurrentPassword);
-            if (user.PasswordHash != currentPasswordHash)
+            // 4. Validar senha atual (suporta SHA256 e BCrypt)
+            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
             {
-                return Result<LoginResponse>.Failure("Senha atual inv�lida");
+                return Result<LoginResponse>.Failure("Senha atual inválida");
             }
 
-            // 5. Validar se nova senha � diferente da atual
-            var newPasswordHash = HashPassword(request.NewPassword);
-            if (user.PasswordHash == newPasswordHash)
+            // 5. Validar se nova senha é diferente da atual
+            if (request.NewPassword == request.CurrentPassword)
             {
-                return Result<LoginResponse>.Failure("Nova senha n�o pode ser igual � senha atual");
+                return Result<LoginResponse>.Failure("Nova senha não pode ser igual à senha atual");
             }
 
-            // 6. Validar se nova senha n�o � a senha padr�o (data de nascimento)
+            // 6. Validar se nova senha não é a senha padrão (data de nascimento)
             var defaultPassword = user.GetDefaultPassword();
-            var defaultPasswordHash = HashPassword(defaultPassword);
-            if (newPasswordHash == defaultPasswordHash)
+            if (request.NewPassword == defaultPassword)
             {
-                return Result<LoginResponse>.Failure($"Nova senha n�o pode ser a senha padr�o (data de nascimento: {defaultPassword})");
+                return Result<LoginResponse>.Failure($"Nova senha não pode ser a senha padrão (data de nascimento: {defaultPassword})");
             }
 
-            // 7. Atualizar senha (j� marca IsFirstAccess = false)
+            // 7. Gerar hash BCrypt da nova senha (sempre BCrypt para novas senhas)
+            var newPasswordHash = _passwordHasher.HashPassword(request.NewPassword);
             user.SetPassword(newPasswordHash);
 
-            // 8. Persistir altera��es
+            // 8. Atualizar senha (já marca IsFirstAccess = false)
             await _userRepository.UpdateAsync(user, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            // 9. Retornar response
+            // 9. Gerar JWT Token e Refresh Token
+            var token = _jwtTokenService.GenerateAccessToken(
+                user.Id,
+                user.Email,
+                user.Name,
+                user.CPF);
+
+            var refreshToken = _jwtTokenService.GenerateRefreshToken();
+            var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
+
+            // 10. Retornar response
             var response = new LoginResponse
             {
                 UserId = user.Id,
@@ -146,9 +216,10 @@ public class AuthService : IAuthService
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
-                IsFirstAccess = user.IsFirstAccess, // Agora � false
-                Token = null,
-                TokenExpiration = null
+                IsFirstAccess = user.IsFirstAccess,
+                Token = token,
+                TokenExpiration = tokenExpiration,
+                RefreshToken = refreshToken
             };
 
             return Result<LoginResponse>.Success(response, "Senha alterada com sucesso!");
@@ -161,7 +232,230 @@ public class AuthService : IAuthService
     }
 
     /// <summary>
-    /// Verifica se CPF j� existe no sistema
+    /// Renova token JWT usando refresh token
+    /// Valida o token expirado e gera novos tokens (access + refresh)
+    /// </summary>
+    public async Task<Result<LoginResponse>> RefreshTokenAsync(
+        RefreshTokenRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Validar entrada
+            if (string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                return Result<LoginResponse>.Failure("Token e Refresh Token são obrigatórios");
+            }
+
+            // 2. Extrair claims do token expirado
+            var principal = _jwtTokenService.GetPrincipalFromExpiredToken(request.Token);
+            if (principal == null)
+            {
+                return Result<LoginResponse>.Failure("Token inválido");
+            }
+
+            // 3. Extrair UserId das claims
+            var userIdClaim = principal.Claims.FirstOrDefault(c => c.Type == "userId")?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Result<LoginResponse>.Failure("Token inválido: UserId não encontrado");
+            }
+
+            // 4. Buscar usuário
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                return Result<LoginResponse>.Failure("Usuário não encontrado");
+            }
+
+            // 5. Validar se usuário está ativo
+            if (!user.IsActive)
+            {
+                return Result<LoginResponse>.Failure("Usuário desativado");
+            }
+
+            // 6. TODO: Validar refresh token no banco (quando implementarmos persistência)
+            // Por ora, validamos apenas se foi fornecido
+
+            // 7. Gerar novos tokens
+            var newToken = _jwtTokenService.GenerateAccessToken(
+                user.Id,
+                user.Email,
+                user.Name,
+                user.CPF);
+
+            var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
+            var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(newToken) ?? DateTime.UtcNow.AddHours(1);
+
+            // 8. Criar response
+            var response = new LoginResponse
+            {
+                UserId = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                CPF = user.CPF,
+                Phone = user.Phone,
+                IsFirstAccess = user.IsFirstAccess,
+                Token = newToken,
+                TokenExpiration = tokenExpiration,
+                RefreshToken = newRefreshToken
+            };
+
+            return Result<LoginResponse>.Success(response, "Token renovado com sucesso");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result<LoginResponse>.Failure($"Erro ao renovar token: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Troca senha do usuário autenticado
+    /// Valida senha atual e atualiza para nova senha com BCrypt
+    /// </summary>
+    public async Task<Result> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Buscar usuário
+            var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+            if (user == null)
+            {
+                return Result.Failure("Usuário não encontrado");
+            }
+
+            // 2. Validar se usuário está ativo
+            if (!user.IsActive)
+            {
+                return Result.Failure("Usuário desativado");
+            }
+
+            // 3. Validar senha atual
+            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            {
+                return Result.Failure("Senha atual inválida");
+            }
+
+            // 4. Validar se nova senha é diferente da atual
+            if (request.NewPassword == request.CurrentPassword)
+            {
+                return Result.Failure("Nova senha não pode ser igual à senha atual");
+            }
+
+            // 5. Validar se as senhas coincidem
+            if (request.NewPassword != request.ConfirmPassword)
+            {
+                return Result.Failure("Nova senha e confirmação não coincidem");
+            }
+
+            // 6. Validar força da senha (mínimo 8 caracteres)
+            if (request.NewPassword.Length < 8)
+            {
+                return Result.Failure("Nova senha deve ter no mínimo 8 caracteres");
+            }
+
+            // 7. Validar se nova senha não é a senha padrão (data de nascimento)
+            var defaultPassword = user.GetDefaultPassword();
+            if (request.NewPassword == defaultPassword)
+            {
+                return Result.Failure($"Nova senha não pode ser a senha padrão (data de nascimento: {defaultPassword})");
+            }
+
+            // 8. Gerar hash BCrypt da nova senha
+            var newPasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+            user.SetPassword(newPasswordHash);
+
+            // 9. Atualizar usuário
+            await _userRepository.UpdateAsync(user, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Senha alterada com sucesso!");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result.Failure($"Erro ao alterar senha: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Reseta senha usando CPF (esqueceu a senha)
+    /// Aplica mesmas validações de troca de senha
+    /// </summary>
+    public async Task<Result> ForgotPasswordAsync(
+        ForgotPasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Validar entrada
+            if (string.IsNullOrWhiteSpace(request.CPF))
+            {
+                return Result.Failure("CPF é obrigatório");
+            }
+
+            // 2. Normalizar CPF e buscar usuário
+            var cpf = NormalizeCPF(request.CPF);
+            var user = await _userRepository.GetByCPFAsync(cpf, cancellationToken);
+            
+            if (user == null)
+            {
+                return Result.Failure("CPF não encontrado");
+            }
+
+            // 3. Validar se usuário está ativo
+            if (!user.IsActive)
+            {
+                return Result.Failure("Usuário desativado");
+            }
+
+            // 4. Validar se as senhas coincidem
+            if (request.NewPassword != request.ConfirmPassword)
+            {
+                return Result.Failure("Nova senha e confirmação não coincidem");
+            }
+
+            // 5. Validar força da senha (mínimo 8 caracteres)
+            if (request.NewPassword.Length < 8)
+            {
+                return Result.Failure("Nova senha deve ter no mínimo 8 caracteres");
+            }
+
+            // 6. Validar se nova senha não é a senha padrão (data de nascimento)
+            var defaultPassword = user.GetDefaultPassword();
+            if (request.NewPassword == defaultPassword)
+            {
+                return Result.Failure($"Nova senha não pode ser a senha padrão (data de nascimento: {defaultPassword})");
+            }
+
+            // 7. Validar se nova senha é diferente da senha atual
+            if (_passwordHasher.VerifyPassword(request.NewPassword, user.PasswordHash))
+            {
+                return Result.Failure("Nova senha não pode ser igual à senha atual");
+            }
+
+            // 8. Gerar hash BCrypt da nova senha
+            var newPasswordHash = _passwordHasher.HashPassword(request.NewPassword);
+            user.SetPassword(newPasswordHash);
+
+            // 9. Atualizar usuário
+            await _userRepository.UpdateAsync(user, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Senha redefinida com sucesso! Faça login com sua nova senha.");
+        }
+        catch (Exception ex)
+        {
+            // TODO: Implementar logging aqui
+            return Result.Failure($"Erro ao redefinir senha: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Verifica se CPF já existe no sistema
     /// </summary>
     public async Task<bool> CPFExistsAsync(
         string cpf,
@@ -186,21 +480,4 @@ public class AuthService : IAuthService
     {
         return cpf.Replace(".", "").Replace("-", "").Replace(" ", "").Trim();
     }
-
-    /// <summary>
-    /// Hash simples da senha (SHA256)
-    /// TODO: Futuro - Usar BCrypt para hash de senha
-    /// </summary>
-    public static string HashPassword(string password)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(password);
-        var hash = sha256.ComputeHash(bytes);
-        return Convert.ToBase64String(hash);
-    }
-
-    // TODO: M�todos futuros
-    // public async Task<Result<LoginResponse>> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
-    // public async Task<Result> LogoutAsync(Guid userId, CancellationToken cancellationToken = default)
-    // public async Task<Result> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default)
 }

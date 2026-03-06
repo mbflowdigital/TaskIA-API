@@ -1,4 +1,5 @@
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace Application.Controllers;
 /// Controller Health Check
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class HealthController : ControllerBase
