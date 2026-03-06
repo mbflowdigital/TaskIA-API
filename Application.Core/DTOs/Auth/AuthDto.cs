@@ -29,9 +29,10 @@ public class LoginResponse
     /// </summary>
     public bool RequiresOnboarding { get; set; }
     
-    // Preparado para futuro (JWT)
+    // JWT
     public string? Token { get; set; }
     public DateTime? TokenExpiration { get; set; }
+    public string? RefreshToken { get; set; }
 }
 
 /// <summary>
@@ -67,6 +68,36 @@ public class ChangePasswordFirstAccessRequest
 {
     public string CPF { get; set; } = string.Empty;
     public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// DTO para requisição de refresh token
+/// </summary>
+public class RefreshTokenRequest
+{
+    public string Token { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// DTO para troca de senha (usuário autenticado)
+/// </summary>
+public class ChangePasswordRequest
+{
+    public Guid UserId { get; set; }
+    public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// DTO para resetar senha (esqueceu a senha)
+/// </summary>
+public class ForgotPasswordRequest
+{
+    public string CPF { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmPassword { get; set; } = string.Empty;
 }

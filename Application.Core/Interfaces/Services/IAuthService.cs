@@ -28,6 +28,26 @@ public interface IAuthService
     Task<Result<LoginResponse>> ChangePasswordFirstAccessAsync(ChangePasswordFirstAccessRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Realiza logout do usuário revogando o token JWT
+    /// </summary>
+    Task<Result> LogoutAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renova token JWT usando refresh token
+    /// </summary>
+    Task<Result<LoginResponse>> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Troca senha do usuário autenticado
+    /// </summary>
+    Task<Result> ChangePasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reseta senha usando CPF (esqueceu a senha)
+    /// Aplica mesmas validações de troca de senha
+    /// </summary>
+    Task<Result> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
     /// Registra/cria um novo usuário.
     /// Observação: validação de permissão (403) deve ser feita no Controller com base nas Claims.
     /// </summary>

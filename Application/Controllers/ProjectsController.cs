@@ -2,6 +2,7 @@ using Application.Core.DTOs.Projects;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -12,6 +13,7 @@ namespace Application.Controllers;
 /// Gerencia opera��es CRUD de projetos
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class ProjectsController : ControllerBase
