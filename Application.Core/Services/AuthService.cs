@@ -114,6 +114,7 @@ public class AuthService : IAuthService
                 Phone = user.Phone,
                 Role = user.Role.ToString(),
                 IsFirstAccess = user.IsFirstAccess,
+                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
                 Token = token,
                 TokenExpiration = tokenExpiration,
                 RefreshToken = refreshToken
@@ -238,10 +239,11 @@ public class AuthService : IAuthService
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
+                 Role = user.Role.ToString(),
+                 RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
                 Token = token,
                 TokenExpiration = tokenExpiration,
-                RefreshToken = refreshToken,
-                 Role = user.Role.ToString(),
+                 RefreshToken = refreshToken,
             };
 
             return Result<LoginResponse>.Success(response, "Senha alterada com sucesso!");
@@ -313,11 +315,14 @@ public class AuthService : IAuthService
             var response = new LoginResponse
             {
                 UserId = user.Id,
+                CompanyId = user.CompanyId,
                 Name = user.Name,
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
+                Role = user.Role.ToString(),
+                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
                 Token = newToken,
                 TokenExpiration = tokenExpiration,
                 RefreshToken = newRefreshToken
