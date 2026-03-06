@@ -6,6 +6,7 @@ namespace Application.Core.DTOs.Users;
 public record UserDto
 {
     public Guid Id { get; init; }
+    public Guid? CompanyId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Phone { get; init; }

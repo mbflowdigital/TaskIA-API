@@ -30,11 +30,19 @@ public class UserService : IUserService
     /// </summary>
     public async Task<Result<UserDto>> CreateAsync(
         CreateUserRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var anyUsers = await _userRepository.AnyAsync(cancellationToken);
+
+            // Regras de permissão por perfil/logado
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<UserDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
 
             // 1. Validar se email já existe
             var emailExists = await _userRepository.EmailExistsAsync(request.Email, cancellationToken);
@@ -62,6 +70,26 @@ public class UserService : IUserService
                 }
             }
 
+            if (actorRole == UserRole.USER)
+            {
+                return Result<UserDto>.Failure("Usuários padrão não podem criar outros usuários.");
+            }
+
+            // ADM só pode criar USER e sempre dentro da própria empresa
+            if (actorRole == UserRole.ADM)
+            {
+                if (targetRole != UserRole.USER)
+                    return Result<UserDto>.Failure("ADM só pode criar usuários do tipo USER.");
+            }
+
+            // ADM_MASTER pode criar ADM e USER (não pode criar ADM_MASTER)
+            if (actorRole == UserRole.ADM_MASTER)
+            {
+                var canCreate = targetRole == UserRole.ADM || targetRole == UserRole.USER;
+                if (!canCreate)
+                    return Result<UserDto>.Failure("ADM_MASTER só pode criar ADM ou USER.");
+            }
+
             // Regra de bootstrap: primeiro usuário do sistema vira ADM_MASTER
             if (!anyUsers)
             {
@@ -75,7 +103,8 @@ public class UserService : IUserService
                 Phone = request.Phone,
                 CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
                 BirthDate = request.BirthDate,
-                Role = targetRole
+                Role = targetRole,
+                CompanyId = actorRole == UserRole.ADM ? actor?.CompanyId : null
             };
 
             // 4. Hash da senha padrão (data de nascimento: ddMMyyyy)
@@ -105,14 +134,26 @@ public class UserService : IUserService
     /// </summary>
     public async Task<Result<UserDto>> GetByIdAsync(
         Guid id,
+        Guid? actorUserId,
+        UserRole? actorRole,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<UserDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
             var user = await _userRepository.GetByIdAsync(id, cancellationToken);
             if (user == null)
             {
                 return Result<UserDto>.Failure($"Usuário não encontrado com ID {id}");
+            }
+
+            if (actorRole == UserRole.ADM && actor?.CompanyId != user.CompanyId)
+            {
+                return Result<UserDto>.Failure("Sem permissão para acessar usuário de outra empresa.");
             }
 
             return Result<UserDto>.Success(MapToDto(user));
@@ -128,11 +169,27 @@ public class UserService : IUserService
     /// Lista todos os usuários ativos
     /// </summary>
     public async Task<Result<IEnumerable<UserDto>>> GetAllAsync(
+        Guid? actorUserId,
+        UserRole? actorRole,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var users = await _userRepository.GetAllAsync(cancellationToken);
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<IEnumerable<UserDto>>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            IEnumerable<User> users;
+            if (actorRole == UserRole.ADM && actor?.CompanyId != null)
+            {
+                users = await _userRepository.GetByCompanyIdAsync(actor.CompanyId.Value, cancellationToken);
+            }
+            else
+            {
+                users = await _userRepository.GetAllAsync(cancellationToken);
+            }
+
             var userDtos = users.Where(u => u.IsActive).Select(MapToDto).ToList();
             
             return Result<IEnumerable<UserDto>>.Success(
@@ -151,14 +208,26 @@ public class UserService : IUserService
     /// </summary>
     public async Task<Result<UserDto>> UpdateAsync(
         UpdateUserRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<UserDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
             var user = await _userRepository.GetByIdAsync(request.Id, cancellationToken);
             if (user == null)
             {
                 return Result<UserDto>.Failure($"Usuário não encontrado com ID {request.Id}");
+            }
+
+            if (actorRole == UserRole.ADM && actor?.CompanyId != user.CompanyId)
+            {
+                return Result<UserDto>.Failure("ADM não pode editar usuários de outra empresa.");
             }
 
             if (!user.IsActive)
@@ -187,14 +256,26 @@ public class UserService : IUserService
     /// </summary>
     public async Task<Result> DeleteAsync(
         Guid id,
+        Guid? actorUserId,
+        UserRole? actorRole,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
             var user = await _userRepository.GetByIdAsync(id, cancellationToken);
             if (user == null)
             {
                 return Result.Failure($"Usuário não encontrado com ID {id}");
+            }
+
+            if (actorRole == UserRole.ADM && actor?.CompanyId != user.CompanyId)
+            {
+                return Result.Failure("ADM não pode desativar usuários de outra empresa.");
             }
 
             if (!user.IsActive)
@@ -271,6 +352,7 @@ public class UserService : IUserService
         return new UserDto
         {
             Id = user.Id,
+            CompanyId = user.CompanyId,
             Name = user.Name,
             Email = user.Email,
             Phone = user.Phone,
@@ -283,5 +365,33 @@ public class UserService : IUserService
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
+    }
+
+    private async Task<Result<User?>> ResolveActorAsync(
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken)
+    {
+        // Sem contexto de autenticação: mantém comportamento legado
+        if (!actorRole.HasValue)
+            return Result<User?>.Success(null);
+
+        if (actorRole == UserRole.USER)
+            return Result<User?>.Failure("Usuários padrão não possuem permissão para esta operação.");
+
+        if (actorRole != UserRole.ADM)
+            return Result<User?>.Success(null);
+
+        if (!actorUserId.HasValue)
+            return Result<User?>.Failure("Não foi possível identificar o usuário ADM logado.");
+
+        var actor = await _userRepository.GetByIdAsync(actorUserId.Value, cancellationToken);
+        if (actor == null || !actor.IsActive)
+            return Result<User?>.Failure("Usuário ADM logado inválido ou inativo.");
+
+        if (actor.CompanyId == null)
+            return Result<User?>.Failure("ADM sem empresa vinculada não pode gerenciar equipe.");
+
+        return Result<User?>.Success(actor);
     }
 }

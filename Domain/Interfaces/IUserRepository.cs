@@ -34,6 +34,11 @@ public interface IUserRepository : IRepository<User>
     /// </summary>
     Task<bool> CPFExistsAsync(string cpf, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lista usuários de uma empresa específica
+    /// </summary>
+    Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
+
     // TODO: Adicionar outros métodos específicos conforme necessário
     // Exemplo: Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);
 }

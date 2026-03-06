@@ -1,13 +1,15 @@
 using Application.Core.DTOs.Projects;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Application.Controllers;
 
 /// <summary>
 /// Controller de Projetos
-/// Gerencia operações CRUD de projetos
+/// Gerencia operaï¿½ï¿½es CRUD de projetos
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -31,7 +33,8 @@ public class ProjectsController : ControllerBase
         [FromBody] CreateProjectRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _projectService.CreateAsync(request, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.CreateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -42,7 +45,8 @@ public class ProjectsController : ControllerBase
     [ProducesResponseType(typeof(Result<IEnumerable<ProjectDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var result = await _projectService.GetAllAsync(cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetAllAsync(actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -56,7 +60,8 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _projectService.GetByIdAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetByIdAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -73,10 +78,11 @@ public class ProjectsController : ControllerBase
     {
         if (id != request.Id)
         {
-            return BadRequest(Result.Failure("ID da URL diferente do ID do corpo da requisição"));
+            return BadRequest(Result.Failure("ID da URL diferente do ID do corpo da requisiï¿½ï¿½o"));
         }
 
-        var result = await _projectService.UpdateAsync(request, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.UpdateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -90,7 +96,8 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _projectService.DeleteAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.DeleteAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -105,10 +112,11 @@ public class ProjectsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return BadRequest(Result.Failure("Nome é obrigatório"));
+            return BadRequest(Result.Failure("Nome ï¿½ obrigatï¿½rio"));
         }
 
-        var result = await _projectService.FindByNameAsync(name, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.FindByNameAsync(name, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -123,15 +131,16 @@ public class ProjectsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(status))
         {
-            return BadRequest(Result.Failure("Status é obrigatório"));
+            return BadRequest(Result.Failure("Status ï¿½ obrigatï¿½rio"));
         }
 
-        var result = await _projectService.FindByStatusAsync(status, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.FindByStatusAsync(status, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
     /// <summary>
-    /// Verifica se nome de projeto já está cadastrado
+    /// Verifica se nome de projeto jï¿½ estï¿½ cadastrado
     /// </summary>
     [HttpGet("check-name")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -141,11 +150,11 @@ public class ProjectsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return BadRequest(new { exists = false, message = "Nome inválido" });
+            return BadRequest(new { exists = false, message = "Nome invï¿½lido" });
         }
 
         var exists = await _projectService.NameExistsAsync(name, cancellationToken);
-        return Ok(new { exists, message = exists ? "Nome já cadastrado" : "Nome disponível" });
+        return Ok(new { exists, message = exists ? "Nome jï¿½ cadastrado" : "Nome disponï¿½vel" });
     }
 
     /// <summary>
@@ -158,7 +167,30 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _projectService.ToggleStatusAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.ToggleStatusAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    private (Guid? ActorUserId, UserRole? ActorRole) GetActorContext()
+    {
+        var userIdRaw =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+            User.FindFirst("sub")?.Value ??
+            Request.Headers["X-User-Id"].FirstOrDefault();
+
+        var roleRaw =
+            User.FindFirst(ClaimTypes.Role)?.Value ??
+            Request.Headers["X-User-Role"].FirstOrDefault();
+
+        Guid? actorUserId = null;
+        if (!string.IsNullOrWhiteSpace(userIdRaw) && Guid.TryParse(userIdRaw, out var parsedId))
+            actorUserId = parsedId;
+
+        UserRole? actorRole = null;
+        if (!string.IsNullOrWhiteSpace(roleRaw) && Enum.TryParse<UserRole>(roleRaw, true, out var parsedRole))
+            actorRole = parsedRole;
+
+        return (actorUserId, actorRole);
     }
 }

@@ -61,6 +61,17 @@ public class UserRepository : Repository<User>, IUserRepository
             .AnyAsync(u => u.CPF == normalizedCPF, cancellationToken);
     }
 
+    /// <summary>
+    /// Lista usuários de uma empresa específica
+    /// </summary>
+    public async Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(u => u.CompanyId == companyId)
+            .OrderBy(u => u.Name)
+            .ToListAsync(cancellationToken);
+    }
+
     // TODO: Exemplo de método específico que pode ser adicionado
     // public async Task<IEnumerable<User>> GetVerifiedUsersAsync(CancellationToken cancellationToken = default)
     // {

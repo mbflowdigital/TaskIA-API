@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Infrastructure.Repositories;
 
 /// <summary>
-/// Repositório específico para Project
-/// Herda Repository genérico e implementa métodos específicos de IProjectRepository
+/// Repositï¿½rio especï¿½fico para Project
+/// Herda Repository genï¿½rico e implementa mï¿½todos especï¿½ficos de IProjectRepository
 /// </summary>
 public class ProjectRepository : Repository<Project>, IProjectRepository
 {
@@ -23,7 +23,8 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
         var normalizedName = name.Trim().ToLower();
         
         return await _dbSet
-            .Include(p => p.User) // Incluir dados do usuário
+            .Include(p => p.User) // Incluir dados do usuï¿½rio
+            .Include(p => p.Company)
             .Where(p => p.IsActive && p.Name.ToLower().Contains(normalizedName))
             .OrderBy(p => p.Name)
             .ToListAsync(cancellationToken);
@@ -35,14 +36,15 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     public async Task<IEnumerable<Project>> FindByStatusAsync(string status, CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(p => p.User) // Incluir dados do usuário
+            .Include(p => p.User) // Incluir dados do usuï¿½rio
+            .Include(p => p.Company)
             .Where(p => p.IsActive && p.Status == status)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Verifica se já existe projeto com o mesmo nome
+    /// Verifica se jï¿½ existe projeto com o mesmo nome
     /// </summary>
     public async Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken = default)
     {
@@ -53,31 +55,46 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     }
 
     /// <summary>
-    /// Busca apenas projetos ativos (com dados do usuário)
+    /// Busca apenas projetos ativos (com dados do usuï¿½rio)
     /// </summary>
     public async Task<IEnumerable<Project>> GetActiveProjectsAsync(CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(p => p.User) // Incluir dados do usuário
+            .Include(p => p.User) // Incluir dados do usuï¿½rio
+            .Include(p => p.Company)
             .Where(p => p.IsActive)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Busca projetos de um usuário específico
+    /// Busca projetos ativos por empresa
+    /// </summary>
+    public async Task<IEnumerable<Project>> GetActiveProjectsByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(p => p.User)
+            .Include(p => p.Company)
+            .Where(p => p.IsActive && p.CompanyId == companyId)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Busca projetos de um usuï¿½rio especï¿½fico
     /// </summary>
     public async Task<IEnumerable<Project>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _dbSet
             .Include(p => p.User)
+            .Include(p => p.Company)
             .Where(p => p.UserId == userId && p.IsActive)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Verifica se usuário existe (para validação de FK)
+    /// Verifica se usuï¿½rio existe (para validaï¿½ï¿½o de FK)
     /// </summary>
     public async Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
@@ -85,12 +102,13 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     }
 
     /// <summary>
-    /// Override GetByIdAsync para incluir dados do usuário
+    /// Override GetByIdAsync para incluir dados do usuï¿½rio
     /// </summary>
     public override async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _dbSet
             .Include(p => p.User)
+            .Include(p => p.Company)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 }

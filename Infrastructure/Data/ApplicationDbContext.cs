@@ -39,6 +39,16 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Company>()
             .HasIndex(c => c.Name);
 
+        // Relacionamento Company -> Projects (1:N)
+        modelBuilder.Entity<Company>()
+            .HasMany(c => c.Projects)
+            .WithOne(p => p.Company)
+            .HasForeignKey(p => p.CompanyId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Project>()
+            .HasIndex(p => p.CompanyId);
+
         // Configurar relacionamento User -> Projects
         modelBuilder.Entity<User>()
             .HasMany(u => u.Projects)

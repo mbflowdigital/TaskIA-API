@@ -22,6 +22,9 @@ public class Company : BaseEntity
     // Relacionamento com Users (uma empresa tem vários usuários)
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 
+    // Relacionamento com Projects (uma empresa tem vários projetos)
+    public virtual ICollection<Project> Projects { get; set; } = new List<Project>();
+
     public Company() { }
 
     public void Update(string name, string? address, int numberOfMembers, string? category)

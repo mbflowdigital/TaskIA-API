@@ -65,16 +65,22 @@ public class AuthService : IAuthService
             }
 
             // 5. Criar response
+            var companyName = user.CompanyId.HasValue
+                ? (await _companyRepository.GetByIdAsync(user.CompanyId.Value, cancellationToken))?.Name
+                : null;
+
             var response = new LoginResponse
             {
                 UserId = user.Id,
+                CompanyId = user.CompanyId,
+                CompanyName = companyName,
                 Name = user.Name,
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
                 Role = user.Role.ToString(),
                 IsFirstAccess = user.IsFirstAccess,
-                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
+                RequiresOnboarding = false,
                 
                 // TODO: Futuro - Gerar JWT token
                 Token = null,
@@ -149,15 +155,21 @@ public class AuthService : IAuthService
             await _unitOfWork.CommitAsync(cancellationToken);
 
             // 9. Retornar response
+            var companyName = user.CompanyId.HasValue
+                ? (await _companyRepository.GetByIdAsync(user.CompanyId.Value, cancellationToken))?.Name
+                : null;
+
             var response = new LoginResponse
             {
                 UserId = user.Id,
+                CompanyId = user.CompanyId,
+                CompanyName = companyName,
                 Name = user.Name,
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
                 Role = user.Role.ToString(),
-                IsFirstAccess = user.IsFirstAccess, // Agora � false                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,                Token = null,
+                IsFirstAccess = user.IsFirstAccess, // Agora � false                RequiresOnboarding = false,                Token = null,
                 TokenExpiration = null
             };
 
@@ -338,6 +350,8 @@ public class AuthService : IAuthService
             var response = new LoginResponse
             {
                 UserId = user.Id,
+                CompanyId = user.CompanyId,
+                CompanyName = company.Name,
                 Name = user.Name,
                 Email = user.Email,
                 CPF = user.CPF,

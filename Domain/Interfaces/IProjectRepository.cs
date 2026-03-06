@@ -3,8 +3,8 @@ using Domain.Entities;
 namespace Domain.Interfaces;
 
 /// <summary>
-/// Interface específica para repositório de Projects
-/// Herda operações genéricas e adiciona métodos específicos
+/// Interface especï¿½fica para repositï¿½rio de Projects
+/// Herda operaï¿½ï¿½es genï¿½ricas e adiciona mï¿½todos especï¿½ficos
 /// </summary>
 public interface IProjectRepository : IRepository<Project>
 {
@@ -19,7 +19,7 @@ public interface IProjectRepository : IRepository<Project>
     Task<IEnumerable<Project>> FindByStatusAsync(string status, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Verifica se já existe projeto com o mesmo nome (para o mesmo usuário no futuro)
+    /// Verifica se jï¿½ existe projeto com o mesmo nome (para o mesmo usuï¿½rio no futuro)
     /// </summary>
     Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken = default);
 
@@ -29,12 +29,17 @@ public interface IProjectRepository : IRepository<Project>
     Task<IEnumerable<Project>> GetActiveProjectsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Busca projetos de um usuário específico
+    /// Busca projetos de um usuï¿½rio especï¿½fico
     /// </summary>
     Task<IEnumerable<Project>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Verifica se usuário existe (FK constraint)
+    /// Busca projetos ativos de uma empresa especÃ­fica
+    /// </summary>
+    Task<IEnumerable<Project>> GetActiveProjectsByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verifica se usuï¿½rio existe (FK constraint)
     /// </summary>
     Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken = default);
 }

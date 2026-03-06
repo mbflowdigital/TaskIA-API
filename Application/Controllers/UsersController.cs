@@ -39,8 +39,13 @@ public class UsersController : ControllerBase
         [FromBody] CreateUserRequest request,
         CancellationToken cancellationToken)
     {
+        var (actorUserId, actorRole) = GetActorContext();
+
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
         // Verificar permissão via Claims (ativo quando JWT estiver implementado)
-        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        var roleClaim = actorRole?.ToString();
         if (!string.IsNullOrWhiteSpace(roleClaim) &&
             Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var claimRole) &&
             claimRole == UserRole.USER)
@@ -49,7 +54,7 @@ public class UsersController : ControllerBase
                 Result.Failure("Usuários padrão não podem criar outros usuários."));
         }
 
-        var result = await _userService.CreateAsync(request, cancellationToken);
+        var result = await _userService.CreateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -63,7 +68,11 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(Result<IEnumerable<UserDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var result = await _userService.GetAllAsync(cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.GetAllAsync(actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -82,7 +91,11 @@ public class UsersController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _userService.GetByIdAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.GetByIdAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -108,7 +121,11 @@ public class UsersController : ControllerBase
             return BadRequest(Result.Failure("ID da URL diferente do ID do corpo da requisição"));
         }
 
-        var result = await _userService.UpdateAsync(request, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.UpdateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -127,7 +144,11 @@ public class UsersController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _userService.DeleteAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.DeleteAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -150,6 +171,46 @@ public class UsersController : ControllerBase
 
         var result = await _userService.FindByEmailAsync(email, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    private (Guid? ActorUserId, UserRole? ActorRole) GetActorContext()
+    {
+        var userIdRaw =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+            User.FindFirst("sub")?.Value ??
+            Request.Headers["X-User-Id"].FirstOrDefault();
+
+        var roleRaw =
+            User.FindFirst(ClaimTypes.Role)?.Value ??
+            Request.Headers["X-User-Role"].FirstOrDefault();
+
+        Guid? actorUserId = null;
+        if (!string.IsNullOrWhiteSpace(userIdRaw) && Guid.TryParse(userIdRaw, out var parsedId))
+            actorUserId = parsedId;
+
+        UserRole? actorRole = null;
+        if (!string.IsNullOrWhiteSpace(roleRaw) && Enum.TryParse<UserRole>(roleRaw, true, out var parsedRole))
+            actorRole = parsedRole;
+
+        return (actorUserId, actorRole);
+    }
+
+    private IActionResult? EnsureAdminRole(UserRole? actorRole)
+    {
+        if (!actorRole.HasValue)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Perfil do usuário não identificado para esta operação."));
+        }
+
+        var isAdmin = actorRole == UserRole.ADM || actorRole == UserRole.ADM_MASTER;
+        if (!isAdmin)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Apenas administradores podem acessar este recurso."));
+        }
+
+        return null;
     }
 
     /// <summary>
