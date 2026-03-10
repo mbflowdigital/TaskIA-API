@@ -29,7 +29,7 @@ public class JwtTokenService : IJwtTokenService
     /// <summary>
     /// Gera token JWT de acesso com claims do usuário
     /// </summary>
-    public string GenerateAccessToken(Guid userId, string email, string name, string cpf, string role)
+    public string GenerateAccessToken(Guid userId, string email, string name, string cpf)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
@@ -39,7 +39,6 @@ public class JwtTokenService : IJwtTokenService
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Email, email),
             new(ClaimTypes.Name, name),
-            new(ClaimTypes.Role, role),
             new("cpf", cpf),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };

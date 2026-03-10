@@ -92,8 +92,7 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF,
-                user.Role.ToString());
+                user.CPF);
 
             var refreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
@@ -221,8 +220,7 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF,
-                user.Role.ToString());
+                user.CPF);
 
             var refreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
@@ -308,8 +306,7 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF,
-                user.Role.ToString());
+                user.CPF);
 
             var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(newToken) ?? DateTime.UtcNow.AddHours(1);
