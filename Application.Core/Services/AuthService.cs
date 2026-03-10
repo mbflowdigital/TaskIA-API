@@ -92,7 +92,8 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF);
+                user.CPF,
+                user.Role?.RoleName ?? "USER"); 
 
             var refreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
@@ -112,9 +113,8 @@ public class AuthService : IAuthService
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
-                Role = user.Role.ToString(),
+                Role = user.Role?.RoleName ?? "USER",
                 IsFirstAccess = user.IsFirstAccess,
-                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
                 Token = token,
                 TokenExpiration = tokenExpiration,
                 RefreshToken = refreshToken
@@ -220,8 +220,8 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF);
-
+                user.CPF,
+                user.Role?.RoleName ?? "USER");
             var refreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(token) ?? DateTime.UtcNow.AddHours(1);
 
@@ -239,8 +239,7 @@ public class AuthService : IAuthService
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
-                 Role = user.Role.ToString(),
-                 RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
+                RequiresOnboarding = user.CompanyId == null,
                 Token = token,
                 TokenExpiration = tokenExpiration,
                  RefreshToken = refreshToken,
@@ -306,7 +305,8 @@ public class AuthService : IAuthService
                 user.Id,
                 user.Email,
                 user.Name,
-                user.CPF);
+                user.CPF,
+                user.Role?.RoleName ?? "USER"); 
 
             var newRefreshToken = _jwtTokenService.GenerateRefreshToken();
             var tokenExpiration = _jwtTokenService.GetTokenExpirationDate(newToken) ?? DateTime.UtcNow.AddHours(1);
@@ -321,8 +321,7 @@ public class AuthService : IAuthService
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
-                Role = user.Role.ToString(),
-                RequiresOnboarding = user.Role == UserRole.ADM && user.CompanyId == null,
+                Role = user.Role?.RoleName ?? "USER",
                 Token = newToken,
                 TokenExpiration = tokenExpiration,
                 RefreshToken = newRefreshToken
@@ -573,7 +572,7 @@ public class AuthService : IAuthService
                 Phone = request.Phone,
                 CPF = cpf,
                 BirthDate = request.BirthDate,
-                Role = requestedRole
+                RoleId = (int)requestedRole
             };
 
             var defaultPassword = user.GetDefaultPassword();
@@ -590,7 +589,7 @@ public class AuthService : IAuthService
                 Phone = user.Phone,
                 CPF = user.CPF,
                 BirthDate = user.BirthDate,
-                Role = user.Role.ToString(),
+                Role = user.Role?.RoleName ?? "USER",
                 IsEmailVerified = user.IsEmailVerified,
                 IsFirstAccess = user.IsFirstAccess,
                 IsActive = user.IsActive,
@@ -621,10 +620,10 @@ public class AuthService : IAuthService
             if (user == null)
                 return Result<LoginResponse>.Failure("Usuário não encontrado.");
 
-            // 2. Validar que é ADM sem empresa
+           /* // 2. Validar que é ADM sem empresa
             if (user.Role != UserRole.ADM)
                 return Result<LoginResponse>.Failure("Apenas usuários ADM precisam completar o onboarding.");
-
+          */
             if (user.CompanyId != null)
                 return Result<LoginResponse>.Failure("Usuário já possui empresa vinculada.");
 
@@ -655,7 +654,7 @@ public class AuthService : IAuthService
                 Email = user.Email,
                 CPF = user.CPF,
                 Phone = user.Phone,
-                Role = user.Role.ToString(),
+                Role = user.Role?.RoleName ?? "USER",
                 IsFirstAccess = user.IsFirstAccess,
                 RequiresOnboarding = false,
                 Token = null,

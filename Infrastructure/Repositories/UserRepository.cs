@@ -22,11 +22,32 @@ public class UserRepository : Repository<User>, IUserRepository
     }
 
     /// <summary>
-    /// Busca usuário por email
+    /// Override: Sempre carrega Role junto com User
+    /// </summary>
+    public override async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Override: Sempre carrega Role junto com User
+    /// </summary>
+    public override async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Busca usuário por email com Role
     /// </summary>
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return await _dbSet
+            .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Email == email.ToLower(), cancellationToken);
     }
 
@@ -47,6 +68,7 @@ public class UserRepository : Repository<User>, IUserRepository
         var normalizedCPF = cpf.Replace(".", "").Replace("-", "").Trim();
         
         return await _dbSet
+            .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.CPF == normalizedCPF && u.IsActive, cancellationToken);
     }
 
@@ -67,6 +89,7 @@ public class UserRepository : Repository<User>, IUserRepository
     public async Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
     {
         return await _dbSet
+            .Include(u => u.Role)
             .Where(u => u.CompanyId == companyId)
             .OrderBy(u => u.Name)
             .ToListAsync(cancellationToken);

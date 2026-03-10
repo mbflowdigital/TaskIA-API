@@ -10,7 +10,7 @@ namespace Domain.Interfaces;
 /// </summary>
 public interface IJwtTokenService
 {
-    string GenerateAccessToken(Guid userId, string email, string name, string cpf);
+    string GenerateAccessToken(Guid userId, string email, string name, string cpf, string roleName);
 
     string GenerateRefreshToken();
 

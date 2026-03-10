@@ -149,7 +149,6 @@ public class AuthController : ControllerBase
         [FromBody] RegisterRequest request,
         CancellationToken cancellationToken)
     {
-        // Ler role das Claims (disponível quando JWT estiver implementado)
         UserRole? createdByRole = null;
         var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
         if (!string.IsNullOrWhiteSpace(roleClaim) &&

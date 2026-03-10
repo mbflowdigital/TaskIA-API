@@ -1,5 +1,6 @@
-using System.ComponentModel.DataAnnotations;
 using Domain.Enums;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities;
 
@@ -32,11 +33,15 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
 
     [Required]
-    public UserRole Role { get; set; } = UserRole.USER;
+    public int RoleId { get; set; }
 
     public bool IsEmailVerified { get; set; }
 
     public bool IsFirstAccess { get; set; } = true;
+
+    // Relacionamento com Role (um usuário tem um perfil)
+    [ForeignKey(nameof(RoleId))]
+    public virtual RoleEntity? Role { get; set; }
 
     // Relacionamento com Company (ADM_MASTER não tem empresa)
     public Guid? CompanyId { get; set; }
@@ -47,6 +52,15 @@ public class User : BaseEntity
 
     // Construtor público
     public User() { }
+
+    /// <summary>
+    /// Obtém o enum UserRole a partir do RoleId
+    /// Útil para validações de permissão que usam o enum
+    /// </summary>
+    public UserRole GetUserRole()
+    {
+        return (UserRole)RoleId;
+    }
 
     public void UpdateProfile(string name, string? phone)
     {

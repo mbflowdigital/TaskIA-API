@@ -107,7 +107,7 @@ public class UserService : IUserService
                 Phone = request.Phone,
                 CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
                 BirthDate = request.BirthDate,
-                Role = targetRole,
+                RoleId = (int)targetRole,
                 CompanyId = actorRole == UserRole.ADM ? actor?.CompanyId : null
             };
 
@@ -121,9 +121,14 @@ public class UserService : IUserService
             // 6. Salvar alterações
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            // 7. Retornar DTO
+            // 7. Recarregar com navegação Role para o DTO
+            var createdUser = await _userRepository.GetByIdAsync(user.Id, cancellationToken);
+            if (createdUser == null)
+                return Result<UserDto>.Failure("Erro ao buscar usuário criado");
+
+            // 8. Retornar DTO
             return Result<UserDto>.Success(
-                MapToDto(user), 
+                MapToDto(createdUser), 
                 $"Usuário criado com sucesso. Senha padrão: {defaultPassword} (alterar no primeiro acesso)");
         }
         catch (Exception ex)
@@ -185,6 +190,8 @@ public class UserService : IUserService
             var actor = actorResult.Data;
 
             IEnumerable<User> users;
+            
+            // ADM só vê usuários da própria empresa
             if (actorRole == UserRole.ADM && actor?.CompanyId != null)
             {
                 users = await _userRepository.GetByCompanyIdAsync(actor.CompanyId.Value, cancellationToken);
@@ -229,6 +236,7 @@ public class UserService : IUserService
                 return Result<UserDto>.Failure($"Usuário não encontrado com ID {request.Id}");
             }
 
+            // Validação de permissão: ADM só edita usuários da própria empresa
             if (actorRole == UserRole.ADM && actor?.CompanyId != user.CompanyId)
             {
                 return Result<UserDto>.Failure("ADM não pode editar usuários de outra empresa.");
@@ -277,6 +285,7 @@ public class UserService : IUserService
                 return Result.Failure($"Usuário não encontrado com ID {id}");
             }
 
+            // Validação de permissão: ADM só desativa usuários da própria empresa
             if (actorRole == UserRole.ADM && actor?.CompanyId != user.CompanyId)
             {
                 return Result.Failure("ADM não pode desativar usuários de outra empresa.");
@@ -350,6 +359,7 @@ public class UserService : IUserService
 
     /// <summary>
     /// Mapeia entidade User para UserDto
+    /// Usa Role.RoleName do relacionamento carregado
     /// </summary>
     private static UserDto MapToDto(User user)
     {
@@ -362,7 +372,7 @@ public class UserService : IUserService
             Phone = user.Phone,
             CPF = user.CPF,
             BirthDate = user.BirthDate,
-            Role = user.Role.ToString(),
+            Role = user.Role?.RoleName ?? "USER",
             IsEmailVerified = user.IsEmailVerified,
             IsFirstAccess = user.IsFirstAccess,
             IsActive = user.IsActive,
@@ -371,6 +381,9 @@ public class UserService : IUserService
         };
     }
 
+    /// <summary>
+    /// Resolve contexto do usuário logado (actor) e valida permissões
+    /// </summary>
     private async Task<Result<User?>> ResolveActorAsync(
         Guid? actorUserId,
         UserRole? actorRole,
@@ -386,12 +399,17 @@ public class UserService : IUserService
         if (actorRole != UserRole.ADM)
             return Result<User?>.Success(null);
 
+        // ADM precisa ter empresa vinculada para gerenciar equipe
         if (!actorUserId.HasValue)
             return Result<User?>.Failure("Não foi possível identificar o usuário ADM logado.");
 
         var actor = await _userRepository.GetByIdAsync(actorUserId.Value, cancellationToken);
         if (actor == null || !actor.IsActive)
             return Result<User?>.Failure("Usuário ADM logado inválido ou inativo.");
+
+        // Validar se o actor carregou a Role corretamente
+        if (actor.Role == null)
+            return Result<User?>.Failure("Erro ao carregar permissões do usuário logado.");
 
         if (actor.CompanyId == null)
             return Result<User?>.Failure("ADM sem empresa vinculada não pode gerenciar equipe.");

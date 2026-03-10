@@ -18,16 +18,11 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Project> Projects { get; set; } = null!;
     public DbSet<Company> Companies { get; set; } = null!;
+    public DbSet<RoleEntity> Roles { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<User>()
-            .Property(u => u.Role)
-            .HasConversion<string>()
-            .HasMaxLength(20)
-            .HasDefaultValue(UserRole.USER);
 
         // Relacionamento Company -> Users (1:N)
         modelBuilder.Entity<Company>()
@@ -38,6 +33,38 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Company>()
             .HasIndex(c => c.Name);
+
+        modelBuilder.Entity<RoleEntity>(entity =>
+        {
+            entity.ToTable("Roles");
+
+            entity.HasKey(r => r.Id);
+
+            // ID não auto-incrementa, usa valores do enum UserRole
+            entity.Property(r => r.Id)
+                .ValueGeneratedNever();
+
+            // Seed inicial com os valores do enum
+            entity.HasData(
+                new RoleEntity { Id = (int)UserRole.USER, RoleName = "USER", Description = "Usuário padrão do sistema" },
+                new RoleEntity { Id = (int)UserRole.ADM, RoleName = "ADM", Description = "Administrador da empresa" },
+                new RoleEntity { Id = (int)UserRole.ADM_MASTER, RoleName = "ADM_MASTER", Description = "Administrador master do sistema" }
+            );
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            // Relacionamento com Role
+            entity.HasOne(u => u.Role)
+                .WithMany(r => r.Users)
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict); 
+
+            // Define valor padrão para RoleId
+            entity.Property(u => u.RoleId)
+                .HasDefaultValue((int)UserRole.USER);
+        });
+
 
         // Relacionamento Company -> Projects (1:N)
         modelBuilder.Entity<Company>()

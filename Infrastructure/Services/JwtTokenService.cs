@@ -1,4 +1,4 @@
-using Domain.Interfaces;
+Ôªøusing Domain.Interfaces;
 using Infrastructure.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -11,8 +11,8 @@ using System.Text;
 namespace Infrastructure.Services;
 
 /// <summary>
-/// ServiÁo respons·vel por gerar e validar tokens JWT
-/// ImplementaÁ„o de infraestrutura - n„o contÈm regras de negÛcio
+/// Servi√ßo respons√°vel por gerar e validar tokens JWT
+/// Implementa√ß√£o de infraestrutura - n√£o cont√©m regras de neg√≥cio
 /// </summary>
 public class JwtTokenService : IJwtTokenService
 {
@@ -27,9 +27,10 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Gera token JWT de acesso com claims do usu·rio
+    /// Gera token JWT de acesso com claims do usu√°rio
+    /// IMPORTANTE: Agora recebe o RoleName como par√¢metro
     /// </summary>
-    public string GenerateAccessToken(Guid userId, string email, string name, string cpf)
+    public string GenerateAccessToken(Guid userId, string email, string name, string cpf, string roleName)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(_jwtSettings.Secret);
@@ -39,6 +40,7 @@ public class JwtTokenService : IJwtTokenService
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Email, email),
             new(ClaimTypes.Name, name),
+            new(ClaimTypes.Role, roleName), // ‚úÖ ADICIONAR ESTA LINHA
             new("cpf", cpf),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
@@ -59,7 +61,7 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Gera refresh token aleatÛrio criptograficamente seguro
+    /// Gera refresh token aleat√≥rio criptograficamente seguro
     /// </summary>
     public string GenerateRefreshToken()
     {
@@ -71,7 +73,7 @@ public class JwtTokenService : IJwtTokenService
 
     /// <summary>
     /// Extrai claims de um token expirado
-    /// ⁄til para implementar refresh token flow
+    /// √ötil para implementar refresh token flow
     /// </summary>
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
@@ -83,7 +85,7 @@ public class JwtTokenService : IJwtTokenService
             ValidIssuer = _jwtSettings.Issuer,
             ValidAudience = _jwtSettings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret)),
-            ValidateLifetime = false // N„o valida expiraÁ„o (token expirado)
+            ValidateLifetime = false // N√£o valida expira√ß√£o (token expirado)
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
@@ -109,26 +111,26 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Revoga um token JWT (adiciona na blacklist atÈ expirar)
-    /// Token revogado n„o pode mais ser usado mesmo que ainda seja v·lido
+    /// Revoga um token JWT (adiciona na blacklist at√© expirar)
+    /// Token revogado n√£o pode mais ser usado mesmo que ainda seja v√°lido
     /// </summary>
     public Task RevokeTokenAsync(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
-            throw new ArgumentException("Token n„o pode ser vazio", nameof(token));
+            throw new ArgumentException("Token n√£o pode ser vazio", nameof(token));
         }
 
         var expirationDate = GetTokenExpirationDate(token);
         
         if (expirationDate == null)
         {
-            throw new ArgumentException("Token inv·lido ou n„o possui data de expiraÁ„o", nameof(token));
+            throw new ArgumentException("Token inv√°lido ou n√£o possui data de expira√ß√£o", nameof(token));
         }
 
         var cacheExpiration = expirationDate.Value - DateTime.UtcNow;
 
-        // Se o token j· expirou, n„o precisa adicionar na blacklist
+        // Se o token j√° expirou, n√£o precisa adicionar na blacklist
         if (cacheExpiration.TotalSeconds > 0)
         {
             var key = GetBlacklistKey(token);
@@ -139,7 +141,7 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Verifica se um token est· revogado (na blacklist)
+    /// Verifica se um token est√° revogado (na blacklist)
     /// </summary>
     public Task<bool> IsTokenRevokedAsync(string token)
     {
@@ -155,7 +157,7 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// ObtÈm a data de expiraÁ„o de um token JWT
+    /// Obt√©m a data de expira√ß√£o de um token JWT
     /// </summary>
     public DateTime? GetTokenExpirationDate(string token)
     {
@@ -178,8 +180,8 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Gera chave ˙nica para o token na blacklist usando hash SHA256
-    /// Economiza memÛria ao armazenar apenas o hash ao invÈs do token completo
+    /// Gera chave √∫nica para o token na blacklist usando hash SHA256
+    /// Economiza mem√≥ria ao armazenar apenas o hash ao inv√©s do token completo
     /// </summary>
     private static string GetBlacklistKey(string token)
     {
