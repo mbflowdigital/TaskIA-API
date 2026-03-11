@@ -19,6 +19,9 @@ public class Company : BaseEntity
     [MaxLength(100)]
     public string? Category { get; set; }
 
+    [MaxLength(14)]
+    public string CNPJ { get; set; }
+
     // Relacionamento com Users (uma empresa tem vários usuários)
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 
