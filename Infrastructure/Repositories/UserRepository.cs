@@ -28,6 +28,8 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
+            .Include(u => u.Company)
+            .Include(u => u.Position)
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
     }
 
@@ -38,6 +40,8 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
+            .Include(u => u.Company)
+            .Include(u => u.Position)
             .ToListAsync(cancellationToken);
     }
 
@@ -48,6 +52,8 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
+            .Include(u => u.Company)
+            .Include(u => u.Position)
             .FirstOrDefaultAsync(u => u.Email == email.ToLower(), cancellationToken);
     }
 
@@ -69,6 +75,8 @@ public class UserRepository : Repository<User>, IUserRepository
         
         return await _dbSet
             .Include(u => u.Role)
+            .Include(u => u.Company)
+            .Include(u => u.Position)
             .FirstOrDefaultAsync(u => u.CPF == normalizedCPF && u.IsActive, cancellationToken);
     }
 
@@ -90,6 +98,8 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
+            .Include(u => u.Company)
+            .Include(u => u.Position)
             .Where(u => u.CompanyId == companyId)
             .OrderBy(u => u.Name)
             .ToListAsync(cancellationToken);

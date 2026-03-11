@@ -43,6 +43,7 @@ public class OnboardingRequest
     public Guid UserId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
+    public string CNPJ { get; set; } = string.Empty;
     public int NumberOfMembers { get; set; }
     public string Category { get; set; } = string.Empty;
 }
@@ -73,7 +74,7 @@ public class ChangePasswordFirstAccessRequest
 }
 
 /// <summary>
-/// DTO para requisição de refresh token
+/// DTO para requisiï¿½ï¿½o de refresh token
 /// </summary>
 public class RefreshTokenRequest
 {
@@ -82,7 +83,7 @@ public class RefreshTokenRequest
 }
 
 /// <summary>
-/// DTO para troca de senha (usuário autenticado)
+/// DTO para troca de senha (usuï¿½rio autenticado)
 /// </summary>
 public class ChangePasswordRequest
 {

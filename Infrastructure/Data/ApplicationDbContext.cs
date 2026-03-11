@@ -35,6 +35,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Company>()
             .HasIndex(c => c.Name);
 
+        modelBuilder.Entity<Company>()
+            .HasIndex(c => c.CNPJ);
+
         modelBuilder.Entity<RoleEntity>(entity =>
         {
             entity.ToTable("Roles");

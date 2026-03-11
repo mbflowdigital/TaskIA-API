@@ -14,6 +14,9 @@ public class Company : BaseEntity
     [MaxLength(500)]
     public string? Address { get; set; }
 
+    [MaxLength(14)]
+    public string? CNPJ { get; set; }
+
     public int NumberOfMembers { get; set; }
 
     [MaxLength(100)]
@@ -27,10 +30,11 @@ public class Company : BaseEntity
 
     public Company() { }
 
-    public void Update(string name, string? address, int numberOfMembers, string? category)
+    public void Update(string name, string? address, string? cnpj, int numberOfMembers, string? category)
     {
         Name = name;
         Address = address;
+        CNPJ = cnpj;
         NumberOfMembers = numberOfMembers;
         Category = category;
         SetUpdatedAt();
