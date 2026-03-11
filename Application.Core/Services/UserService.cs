@@ -4,6 +4,7 @@ using Domain.Common;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
+using System.Text.Json;
 
 namespace Application.Core.Services;
 
@@ -17,15 +18,18 @@ public class UserService : IUserService
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly HttpClient _httpClient;
 
     public UserService(
         IUserRepository userRepository, 
         IUnitOfWork unitOfWork,
-        IPasswordHasher passwordHasher)
+        IPasswordHasher passwordHasher,
+        HttpClient httpClient)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
+        _httpClient = httpClient;
     }
 
     /// <summary>
@@ -358,6 +362,101 @@ public class UserService : IUserService
     }
 
     /// <summary>
+    /// Consulta endereço pelo CEP via API ViaCEP
+    /// </summary>
+    public async Task<Result<ViaCEp>> GetAddressByCepAsync(
+        string cep,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 1. Validar CEP
+            if (string.IsNullOrWhiteSpace(cep))
+            {
+                return Result<ViaCEp>.Failure("CEP é obrigatório");
+            }
+
+            // 2. Normalizar CEP (remover caracteres especiais)
+            var normalizedCep = NormalizeCep(cep);
+
+            // 3. Validar formato do CEP (deve ter 8 dígitos)
+            if (normalizedCep.Length != 8 || !normalizedCep.All(char.IsDigit))
+            {
+                return Result<ViaCEp>.Failure("CEP inválido. Deve conter 8 dígitos");
+            }
+
+            // 4. Fazer requisição para API ViaCEP
+            var response = await _httpClient.GetAsync(
+                $"https://viacep.com.br/ws/{normalizedCep}/json/",
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<ViaCEp>.Failure($"Erro ao consultar CEP: {response.StatusCode}");
+            }
+
+            // 5. Deserializar resposta
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var viaCepData = JsonSerializer.Deserialize<ViaCepResponse>(content, options);
+
+            if (viaCepData == null)
+            {
+                return Result<ViaCEp>.Failure("Erro ao processar resposta da API ViaCEP");
+            }
+
+            // 6. Verificar se CEP foi encontrado
+            if (viaCepData.Erro)
+            {
+                return Result<ViaCEp>.Failure("CEP não encontrado");
+            }
+
+            // 7. Mapear para DTO
+            var result = new ViaCEp(
+                Cep: viaCepData.Cep,
+                Logradouro: viaCepData.Logradouro,
+                Complemento: viaCepData.Complemento,
+                unidade: viaCepData.Unidade,
+                localidade: viaCepData.Localidade,
+                uf: viaCepData.Uf,
+                estado: viaCepData.Estado,
+                regioao: viaCepData.Regiao,
+                ibge: viaCepData.Ibge,
+                gia: viaCepData.Gia,
+                ddd: viaCepData.Ddd,
+                siafi: viaCepData.Siafi
+            );
+
+            return Result<ViaCEp>.Success(result, "CEP consultado com sucesso");
+        }
+        catch (HttpRequestException ex)
+        {
+            return Result<ViaCEp>.Failure($"Erro ao conectar com API ViaCEP: {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            return Result<ViaCEp>.Failure($"Erro ao processar resposta da API: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return Result<ViaCEp>.Failure($"Erro ao consultar CEP: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Normaliza CEP removendo caracteres especiais
+    /// </summary>
+    private static string NormalizeCep(string cep)
+    {
+        return cep.Replace("-", "").Replace(".", "").Replace(" ", "").Trim();
+    }
+
+    /// <summary>
     /// Mapeia entidade User para UserDto
     /// Usa Role.RoleName do relacionamento carregado
     /// </summary>
@@ -415,5 +514,26 @@ public class UserService : IUserService
             return Result<User?>.Failure("ADM sem empresa vinculada não pode gerenciar equipe.");
 
         return Result<User?>.Success(actor);
+    }
+
+    /// <summary>
+    /// Classe auxiliar para deserialização da resposta da API ViaCEP
+    /// </summary>
+    private class ViaCepResponse
+    {
+        public string Cep { get; set; } = string.Empty;
+        public string Logradouro { get; set; } = string.Empty;
+        public string Complemento { get; set; } = string.Empty;
+        public string Unidade { get; set; } = string.Empty;
+        public string Bairro { get; set; } = string.Empty;
+        public string Localidade { get; set; } = string.Empty;
+        public string Uf { get; set; } = string.Empty;
+        public string Estado { get; set; } = string.Empty;
+        public string Regiao { get; set; } = string.Empty;
+        public string Ibge { get; set; } = string.Empty;
+        public string Gia { get; set; } = string.Empty;
+        public string Ddd { get; set; } = string.Empty;
+        public string Siafi { get; set; } = string.Empty;
+        public bool Erro { get; set; }
     }
 }

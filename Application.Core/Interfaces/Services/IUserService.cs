@@ -54,6 +54,8 @@ public interface IUserService
         UserRole? actorRole,
         CancellationToken cancellationToken = default);
 
+    Task<Result<ViaCEp>> GetAddressByCepAsync(string cep, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Busca usuários por email
     /// </summary>

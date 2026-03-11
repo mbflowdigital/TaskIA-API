@@ -175,6 +175,46 @@ public class UsersController : ControllerBase
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
+    /// <summary>
+    /// Consulta endereço pelo CEP via ViaCEP
+    /// </summary>
+    /// <param name="cep">CEP a ser consultado (ex: 01001-000 ou 01001000)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Dados do endereço</returns>
+    /// <response code="200">CEP consultado com sucesso</response>
+    /// <response code="400">CEP inválido ou não encontrado</response>
+    [HttpGet("cep/{cep}")]
+    [ProducesResponseType(typeof(Result<ViaCEp>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAddressByCep(
+        string cep,
+        CancellationToken cancellationToken)
+    {
+        var result = await _userService.GetAddressByCepAsync(cep, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Verifica se email já está cadastrado
+    /// </summary>
+    /// <param name="email">Email para verificar</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>True se email existe, False se não</returns>
+    [HttpGet("check-email")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckEmail(
+        [FromQuery] string email,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(new { exists = false, message = "Email inválido" });
+        }
+
+        var exists = await _userService.EmailExistsAsync(email, cancellationToken);
+        return Ok(new { exists, message = exists ? "Email já cadastrado" : "Email disponível" });
+    }
+
     private (Guid? ActorUserId, UserRole? ActorRole) GetActorContext()
     {
         var userIdRaw =
@@ -213,26 +253,5 @@ public class UsersController : ControllerBase
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Verifica se email já está cadastrado
-    /// </summary>
-    /// <param name="email">Email para verificar</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    /// <returns>True se email existe, False se não</returns>
-    [HttpGet("check-email")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    public async Task<IActionResult> CheckEmail(
-        [FromQuery] string email,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            return BadRequest(new { exists = false, message = "Email inválido" });
-        }
-
-        var exists = await _userService.EmailExistsAsync(email, cancellationToken);
-        return Ok(new { exists, message = exists ? "Email já cadastrado" : "Email disponível" });
     }
 }

@@ -39,7 +39,24 @@ public record UpdateUserRequest(
     Guid Id,
     string Name,
     string? Phone = null
-);
+)
+{
+};
+
+public record ViaCEp(
+    string Cep,
+    string Logradouro,
+    string Complemento,
+    string unidade,
+    string localidade,
+    string uf,
+    string estado,
+    string regioao,
+    string ibge,
+    string gia,
+    string ddd,
+    string siafi)
+{};
 
 /// <summary>
 /// Request para buscar usuário por ID

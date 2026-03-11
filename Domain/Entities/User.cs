@@ -35,6 +35,8 @@ public class User : BaseEntity
     [Required]
     public int RoleId { get; set; }
 
+    public int PositionId { get; set; }
+
     public bool IsEmailVerified { get; set; }
 
     public bool IsFirstAccess { get; set; } = true;
@@ -42,6 +44,10 @@ public class User : BaseEntity
     // Relacionamento com Role (um usuário tem um perfil)
     [ForeignKey(nameof(RoleId))]
     public virtual RoleEntity? Role { get; set; }
+    
+    // Relacionamento com Position (um usuário tem uma posição)
+    [ForeignKey(nameof(PositionId))]
+    public virtual PositionsEntity? Position { get; set; }
 
     // Relacionamento com Company (ADM_MASTER não tem empresa)
     public Guid? CompanyId { get; set; }

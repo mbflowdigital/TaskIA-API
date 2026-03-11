@@ -1,4 +1,6 @@
 using Application.Core;
+using Application.Core.Interfaces.Services;
+using Application.Core.Services;
 using CrossCutting.Extensions;
 using Infrastructure;
 using Infrastructure.ConfigurationJwtToken;
@@ -42,6 +44,9 @@ builder.Services.AddCors(options =>
 builder.Services.AddApplicationCore();
 builder.Services.AddInfrastructure(builder.Configuration); // Já configura JWT Authentication
 builder.Services.AddCrossCutting();
+
+// Registrar HttpClient para UserService
+builder.Services.AddHttpClient<IUserService, UserService>();
 
 // Configurar Controllers
 builder.Services.AddControllers();
