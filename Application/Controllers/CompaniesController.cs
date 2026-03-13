@@ -2,7 +2,6 @@ using Application.Core.DTOs.Companies;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Enums;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -14,7 +13,6 @@ namespace Application.Controllers;
 /// ADM_MASTER não pertence a empresa.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class CompaniesController : ControllerBase
@@ -27,26 +25,7 @@ public class CompaniesController : ControllerBase
     }
 
     /// <summary>
-    /// Lista empresas cadastradas. Requer role ADM_MASTER.
-    /// </summary>
-    [HttpGet]
-    [ProducesResponseType(typeof(Result<IEnumerable<CompanyDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
-    {
-        if (TryGetRole(out var role) && role != UserRole.ADM_MASTER)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden,
-                Result.Failure("Apenas ADM_MASTER pode listar empresas."));
-        }
-
-        var result = await _companyService.GetAllAsync(cancellationToken);
-        return result.IsSuccess ? Ok(result) : BadRequest(result);
-    }
-
-    /// <summary>
-    /// Cria uma nova empresa. Requer role ADM ou ADM_MASTER.
+    /// Cria uma nova empresa. Requer role ADM (quando JWT ativo).
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(Result<CompanyDto>), StatusCodes.Status200OK)]
@@ -59,9 +38,9 @@ public class CompaniesController : ControllerBase
         // Validar permissão quando JWT estiver presente
         if (TryGetRole(out var role))
         {
-            if (role != UserRole.ADM && role != UserRole.ADM_MASTER)
+            if (role != UserRole.ADM)
                 return StatusCode(StatusCodes.Status403Forbidden,
-                    Result.Failure("Apenas administradores podem criar empresas."));
+                    Result.Failure("Apenas ADM pode criar empresas."));
         }
 
         var result = await _companyService.CreateAsync(request, cancellationToken);
@@ -145,11 +124,11 @@ public class CompaniesController : ControllerBase
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
-    // Lê role das claims JWT e, como fallback, dos headers de ator.
+    // Lê role das claims (disponível quando JWT for implementado)
     private bool TryGetRole(out UserRole role)
     {
         role = UserRole.USER;
-        var claim = User.FindFirst(ClaimTypes.Role)?.Value ?? Request.Headers["X-User-Role"].FirstOrDefault();
+        var claim = User.FindFirst(ClaimTypes.Role)?.Value;
         if (string.IsNullOrWhiteSpace(claim)) return false;
         return Enum.TryParse(claim, ignoreCase: true, out role);
     }

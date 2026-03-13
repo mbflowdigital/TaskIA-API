@@ -1,5 +1,4 @@
 using Application.Core.DTOs.Users;
-using Application.Core.DTOs.Positions;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Enums;
@@ -21,12 +20,10 @@ namespace Application.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
-    private readonly IPositionService _positionService;
 
-    public UsersController(IUserService userService, IPositionService positionService)
+    public UsersController(IUserService userService)
     {
         _userService = userService;
-        _positionService = positionService;
     }
 
     /// <summary>
@@ -175,18 +172,6 @@ public class UsersController : ControllerBase
         }
 
         var result = await _userService.FindByEmailAsync(email, cancellationToken);
-        return result.IsSuccess ? Ok(result) : BadRequest(result);
-    }
-
-    /// <summary>
-    /// Lista os cargos cadastrados na tabela Positions.
-    /// </summary>
-    [HttpGet("positions")]
-    [ProducesResponseType(typeof(Result<IEnumerable<PositionDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetPositions(CancellationToken cancellationToken)
-    {
-        var result = await _positionService.GetAllAsync(cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 

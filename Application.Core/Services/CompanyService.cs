@@ -1,10 +1,8 @@
 using Application.Core.DTOs.Companies;
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
-using Application.Core.Validators;
 using Domain.Common;
 using Domain.Entities;
-using Domain.Enums;
 using Domain.Interfaces;
 
 namespace Application.Core.Services;
@@ -37,15 +35,10 @@ public class CompanyService : ICompanyService
             if (string.IsNullOrWhiteSpace(request.Category))
                 return Result<CompanyDto>.Failure("Categoria é obrigatória.");
 
-            var cnpj = CnpjValidator.Normalize(request.CNPJ);
-            if (!CnpjValidator.IsValidBasic(cnpj))
-                return Result<CompanyDto>.Failure("CNPJ inválido. Informe 14 dígitos.");
-
             var company = new Company
             {
                 Name = request.Name.Trim(),
                 Address = request.Address?.Trim(),
-                CNPJ = cnpj,
                 NumberOfMembers = request.NumberOfMembers,
                 Category = request.Category?.Trim()
             };
@@ -58,22 +51,6 @@ public class CompanyService : ICompanyService
         catch (Exception ex)
         {
             return Result<CompanyDto>.Failure($"Erro ao criar empresa: {ex.Message}");
-        }
-    }
-
-    public async Task<Result<IEnumerable<CompanyDto>>> GetAllAsync(
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var companies = await _companyRepository.GetAllWithUsersAsync(cancellationToken);
-            var data = companies.Select(MapToDto).ToList();
-
-            return Result<IEnumerable<CompanyDto>>.Success(data, $"{data.Count} empresa(s) encontrada(s).");
-        }
-        catch (Exception ex)
-        {
-            return Result<IEnumerable<CompanyDto>>.Failure($"Erro ao buscar empresas: {ex.Message}");
         }
     }
 
@@ -107,10 +84,6 @@ public class CompanyService : ICompanyService
             if (string.IsNullOrWhiteSpace(request.Category))
                 return Result<CompanyDto>.Failure("Categoria é obrigatória.");
 
-            var cnpj = CnpjValidator.Normalize(request.CNPJ);
-            if (!CnpjValidator.IsValidBasic(cnpj))
-                return Result<CompanyDto>.Failure("CNPJ inválido. Informe 14 dígitos.");
-
             var company = await _companyRepository.GetByIdAsync(request.Id, cancellationToken);
             if (company == null)
                 return Result<CompanyDto>.Failure("Empresa não encontrada.");
@@ -118,7 +91,7 @@ public class CompanyService : ICompanyService
             if (!company.IsActive)
                 return Result<CompanyDto>.Failure("Empresa inativa não pode ser editada.");
 
-            company.Update(request.Name.Trim(), request.Address?.Trim(), cnpj, request.NumberOfMembers, request.Category?.Trim());
+            company.Update(request.Name.Trim(), request.Address?.Trim(), request.NumberOfMembers, request.Category?.Trim());
 
             await _companyRepository.UpdateAsync(company, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
@@ -171,16 +144,12 @@ public class CompanyService : ICompanyService
                 .Select(u => new UserDto
                 {
                     Id = u.Id,
-                    CompanyId = u.CompanyId,
-                    CompanyName = company.Name,
-                    PositionId = u.PositionId,
-                    PositionName = u.Position?.PositionName,
                     Name = u.Name,
                     Email = u.Email,
                     Phone = u.Phone,
                     CPF = u.CPF,
                     BirthDate = u.BirthDate,
-                    Role = u.Role?.RoleName ?? Enum.GetName(typeof(UserRole), u.RoleId) ?? "USER",
+                    Role = u.Role.ToString(),
                     IsEmailVerified = u.IsEmailVerified,
                     IsFirstAccess = u.IsFirstAccess,
                     IsActive = u.IsActive,
@@ -201,7 +170,6 @@ public class CompanyService : ICompanyService
         Id = company.Id,
         Name = company.Name,
         Address = company.Address,
-        CNPJ = company.CNPJ,
         NumberOfMembers = company.NumberOfMembers,
         Category = company.Category,
         IsActive = company.IsActive,

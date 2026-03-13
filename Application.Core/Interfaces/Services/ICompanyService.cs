@@ -10,7 +10,6 @@ namespace Application.Core.Interfaces.Services;
 public interface ICompanyService
 {
     Task<Result<CompanyDto>> CreateAsync(CreateCompanyRequest request, CancellationToken cancellationToken = default);
-    Task<Result<IEnumerable<CompanyDto>>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<Result<CompanyDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<CompanyDto>> UpdateAsync(UpdateCompanyRequest request, CancellationToken cancellationToken = default);
     Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
