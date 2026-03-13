@@ -22,10 +22,8 @@ public class Company : BaseEntity
     [MaxLength(100)]
     public string? Category { get; set; }
 
-    // Relacionamento com Users (uma empresa tem vários usuários)
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 
-    // Relacionamento com Projects (uma empresa tem vários projetos)
     public virtual ICollection<Project> Projects { get; set; } = new List<Project>();
 
     public Company() { }
