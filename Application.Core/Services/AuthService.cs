@@ -1,6 +1,7 @@
 using Application.Core.DTOs.Auth;
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
+using Application.Core.Validators;
 using Domain.Common;
 using Domain.Entities;
 using Domain.Enums;
@@ -627,11 +628,16 @@ public class AuthService : IAuthService
             if (user.CompanyId != null)
                 return Result<LoginResponse>.Failure("Usuário já possui empresa vinculada.");
 
+            var cnpj = CnpjValidator.Normalize(request.CNPJ);
+            if (!CnpjValidator.IsValidBasic(cnpj))
+                return Result<LoginResponse>.Failure("CNPJ inválido. Informe 14 dígitos.");
+
             // 3. Criar empresa
             var company = new Domain.Entities.Company
             {
                 Name = request.CompanyName.Trim(),
                 Address = request.Address.Trim(),
+                CNPJ = cnpj,
                 NumberOfMembers = request.NumberOfMembers,
                 Category = request.Category.Trim()
             };

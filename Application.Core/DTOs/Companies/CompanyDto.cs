@@ -8,6 +8,7 @@ public record CompanyDto
     public Guid Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public string? Address { get; init; }
+    public string? CNPJ { get; init; }
     public int NumberOfMembers { get; init; }
     public string? Category { get; init; }
     public bool IsActive { get; init; }
@@ -22,6 +23,7 @@ public record CompanyDto
 public record CreateCompanyRequest(
     string Name,
     string? Address,
+    string? CNPJ,
     int NumberOfMembers,
     string? Category
 );
@@ -33,6 +35,7 @@ public record UpdateCompanyRequest(
     Guid Id,
     string Name,
     string? Address,
+    string? CNPJ,
     int NumberOfMembers,
     string? Category
 );
