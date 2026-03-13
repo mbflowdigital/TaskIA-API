@@ -18,9 +18,6 @@ public class CompanyRepository : Repository<Company>, ICompanyRepository
     {
         return await _dbSet
             .Include(c => c.Users.Where(u => u.IsActive))
-                .ThenInclude(u => u.Role)
-            .Include(c => c.Users.Where(u => u.IsActive))
-                .ThenInclude(u => u.Position)
             .Where(c => c.IsActive)
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
@@ -30,9 +27,6 @@ public class CompanyRepository : Repository<Company>, ICompanyRepository
     {
         return await _dbSet
             .Include(c => c.Users.Where(u => u.IsActive))
-                .ThenInclude(u => u.Role)
-            .Include(c => c.Users.Where(u => u.IsActive))
-                .ThenInclude(u => u.Position)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
 

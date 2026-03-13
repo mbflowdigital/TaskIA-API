@@ -16,23 +16,17 @@ namespace Application.Core.Services;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
-    private readonly ICompanyRepository _companyRepository;
-    private readonly IPositionRepository _positionRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
     private readonly HttpClient _httpClient;
 
     public UserService(
-        IUserRepository userRepository,
-        ICompanyRepository companyRepository,
-        IPositionRepository positionRepository,
+        IUserRepository userRepository, 
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
         HttpClient httpClient)
     {
         _userRepository = userRepository;
-        _companyRepository = companyRepository;
-        _positionRepository = positionRepository;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
         _httpClient = httpClient;
@@ -104,32 +98,6 @@ public class UserService : IUserService
                     return Result<UserDto>.Failure("ADM_MASTER só pode criar ADM ou USER.");
             }
 
-            if (!request.PositionId.HasValue)
-                return Result<UserDto>.Failure("Selecione um cargo para o usuário.");
-
-            var positionExists = await _positionRepository.ExistsAsync(request.PositionId.Value, cancellationToken);
-            if (!positionExists)
-                return Result<UserDto>.Failure("Cargo inválido.");
-
-            Guid? companyId;
-            if (actorRole == UserRole.ADM_MASTER)
-            {
-                if (!request.CompanyId.HasValue)
-                    return Result<UserDto>.Failure("ADM_MASTER deve selecionar a empresa do usuário.");
-
-                var companyExists = await _companyRepository.ExistsAsync(request.CompanyId.Value, cancellationToken);
-                if (!companyExists)
-                    return Result<UserDto>.Failure("Empresa inválida.");
-
-                companyId = request.CompanyId.Value;
-            }
-            else
-            {
-                companyId = actor?.CompanyId;
-                if (!companyId.HasValue)
-                    return Result<UserDto>.Failure("ADM sem empresa vinculada não pode criar usuários.");
-            }
-
             // Regra de bootstrap: primeiro usuário do sistema vira ADM_MASTER
             if (!anyUsers)
             {
@@ -144,8 +112,7 @@ public class UserService : IUserService
                 CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
                 BirthDate = request.BirthDate,
                 RoleId = (int)targetRole,
-                CompanyId = companyId,
-                PositionId = request.PositionId.Value
+                CompanyId = actorRole == UserRole.ADM ? actor?.CompanyId : null
             };
 
             // 4. Hash da senha padrão (data de nascimento) 
@@ -284,40 +251,8 @@ public class UserService : IUserService
                 return Result<UserDto>.Failure("Usuário está desativado e não pode ser atualizado");
             }
 
-            var normalizedCpf = string.IsNullOrWhiteSpace(request.CPF)
-                ? user.CPF
-                : request.CPF.Replace(".", "").Replace("-", "").Trim();
-
-            if (!string.Equals(user.CPF, normalizedCpf, StringComparison.Ordinal))
-            {
-                var cpfExists = await _userRepository.CPFExistsAsync(normalizedCpf, cancellationToken);
-                if (cpfExists)
-                    return Result<UserDto>.Failure("CPF já cadastrado. Escolha outro CPF.");
-            }
-
-            var positionId = request.PositionId ?? user.PositionId;
-            var positionExists = await _positionRepository.ExistsAsync(positionId, cancellationToken);
-            if (!positionExists)
-                return Result<UserDto>.Failure("Cargo inválido.");
-
-            Guid? companyId = user.CompanyId;
-            if (actorRole == UserRole.ADM_MASTER && request.CompanyId.HasValue)
-            {
-                var companyExists = await _companyRepository.ExistsAsync(request.CompanyId.Value, cancellationToken);
-                if (!companyExists)
-                    return Result<UserDto>.Failure("Empresa inválida.");
-
-                companyId = request.CompanyId.Value;
-            }
-
             // Atualizar informações
-            user.UpdateAdministrationData(
-                request.Name,
-                request.Phone,
-                normalizedCpf,
-                request.BirthDate ?? user.BirthDate,
-                actorRole == UserRole.ADM ? actor?.CompanyId : companyId,
-                positionId);
+            user.UpdateProfile(request.Name, request.Phone);
 
             // Persistir alterações
             await _userRepository.UpdateAsync(user, cancellationToken);
@@ -485,7 +420,6 @@ public class UserService : IUserService
             var result = new ViaCEp(
                 Cep: viaCepData.Cep,
                 Logradouro: viaCepData.Logradouro,
-                Bairro: viaCepData.Bairro,
                 Complemento: viaCepData.Complemento,
                 unidade: viaCepData.Unidade,
                 localidade: viaCepData.Localidade,
@@ -532,9 +466,6 @@ public class UserService : IUserService
         {
             Id = user.Id,
             CompanyId = user.CompanyId,
-            CompanyName = user.Company?.Name,
-            PositionId = user.PositionId,
-            PositionName = user.Position?.PositionName,
             Name = user.Name,
             Email = user.Email,
             Phone = user.Phone,

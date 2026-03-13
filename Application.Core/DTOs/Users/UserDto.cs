@@ -7,9 +7,6 @@ public record UserDto
 {
     public Guid Id { get; init; }
     public Guid? CompanyId { get; init; }
-    public string? CompanyName { get; init; }
-    public int PositionId { get; init; }
-    public string? PositionName { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Phone { get; init; }
@@ -32,9 +29,7 @@ public record CreateUserRequest(
     string CPF,
     DateTime BirthDate,
     string? Phone = null,
-    string? Role = null,
-    Guid? CompanyId = null,
-    int? PositionId = null
+    string? Role = null
 );
 
 /// <summary>
@@ -43,11 +38,7 @@ public record CreateUserRequest(
 public record UpdateUserRequest(
     Guid Id,
     string Name,
-    string? Phone = null,
-    string? CPF = null,
-    DateTime? BirthDate = null,
-    Guid? CompanyId = null,
-    int? PositionId = null
+    string? Phone = null
 )
 {
 };
@@ -55,7 +46,6 @@ public record UpdateUserRequest(
 public record ViaCEp(
     string Cep,
     string Logradouro,
-    string Bairro,
     string Complemento,
     string unidade,
     string localidade,

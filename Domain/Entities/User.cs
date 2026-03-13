@@ -75,23 +75,6 @@ public class User : BaseEntity
         SetUpdatedAt();
     }
 
-    public void UpdateAdministrationData(
-        string name,
-        string? phone,
-        string cpf,
-        DateTime birthDate,
-        Guid? companyId,
-        int positionId)
-    {
-        Name = name;
-        Phone = phone;
-        CPF = cpf;
-        BirthDate = birthDate;
-        CompanyId = companyId;
-        PositionId = positionId;
-        SetUpdatedAt();
-    }
-
     public void SetPassword(string passwordHash)
     {
         PasswordHash = passwordHash;
