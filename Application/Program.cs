@@ -10,7 +10,7 @@ using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configurar Forwarded Headers (CRÍTICO para HTTPS atrás de proxy)
+// Configurar Forwarded Headers (CRï¿½TICO para HTTPS atrï¿½s de proxy)
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -42,11 +42,14 @@ builder.Services.AddCors(options =>
 
 // Adicionar camadas ao container de DI
 builder.Services.AddApplicationCore();
-builder.Services.AddInfrastructure(builder.Configuration); // Já configura JWT Authentication
+builder.Services.AddInfrastructure(builder.Configuration); // Jï¿½ configura JWT Authentication
 builder.Services.AddCrossCutting();
 
 // Registrar HttpClient para UserService
 builder.Services.AddHttpClient<IUserService, UserService>();
+
+// Registrar ClaudeService com HttpClient dedicado
+builder.Services.AddHttpClient<Infrastructure.Services.ClaudeService>();
 
 // Configurar Controllers
 builder.Services.AddControllers();
@@ -59,7 +62,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "TaskIA API",
         Version = "v1",
-        Description = "API construída com Clean Architecture, JWT Bearer Authentication e princípios SOLID",
+        Description = "API construï¿½da com Clean Architecture, JWT Bearer Authentication e princï¿½pios SOLID",
         Contact = new OpenApiContact
         {
             Name = "Equipe TaskIA",
@@ -67,7 +70,7 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 
-    // Configurar autenticação Bearer no Swagger
+    // Configurar autenticaï¿½ï¿½o Bearer no Swagger
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header usando Bearer scheme. Exemplo: \"Authorization: Bearer {token}\"",
@@ -93,7 +96,7 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 
-    // Incluir comentários XML na documentação
+    // Incluir comentï¿½rios XML na documentaï¿½ï¿½o
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -104,29 +107,29 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// CRÍTICO: UseForwardedHeaders DEVE vir PRIMEIRO
+// CRï¿½TICO: UseForwardedHeaders DEVE vir PRIMEIRO
 app.UseForwardedHeaders();
 
-// Swagger disponível em TODOS os ambientes
+// Swagger disponï¿½vel em TODOS os ambientes
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "TaskIA API v1");
     c.RoutePrefix = string.Empty; // Swagger na raiz
-    c.DocumentTitle = "TaskIA API - Documentação";
+    c.DocumentTitle = "TaskIA API - Documentaï¿½ï¿½o";
 });
 
 // CORS
 app.UseCors("AllowAngular");
 
-// Middleware de exceções
+// Middleware de exceï¿½ï¿½es
 app.UseCrossCutting(app.Environment);
 
-app.UseAuthentication(); // 1º - Valida o token JWT
+app.UseAuthentication(); // 1ï¿½ - Valida o token JWT
 
-app.UseMiddleware<TokenBlacklistMiddleware>(); // 2º - Verifica se token está revogado
+app.UseMiddleware<TokenBlacklistMiddleware>(); // 2ï¿½ - Verifica se token estï¿½ revogado
 
-app.UseAuthorization(); // 3º - Verifica permissões/claims
+app.UseAuthorization(); // 3ï¿½ - Verifica permissï¿½es/claims
 
 app.MapControllers();
 
