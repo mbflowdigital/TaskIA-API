@@ -7,6 +7,7 @@ namespace Application.Controllers;
 
 public record SuggestProjectRequest(string ProjectName);
 public record ProjectSuggestionResponse(string Description, string Objective);
+public record ProjectAnalysisResponse(string Overview, string Risks, string Recommendations);
 
 /// <summary>
 /// Controller de integração com Claude AI
@@ -44,6 +45,32 @@ public class ClaudeController : ControllerBase
 
         var response = Result<ProjectSuggestionResponse>.Success(
             new ProjectSuggestionResponse(result.Data!.Description, result.Data.Objective),
+            result.Message
+        );
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Analisa um projeto com base em todos os dados preenchidos e gera insights via Claude Sonnet
+    /// </summary>
+    [HttpPost("analyze-project")]
+    [ProducesResponseType(typeof(Result<ProjectAnalysisResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AnalyzeProject(
+        [FromBody] ProjectAnalysisInput request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.ProjectName))
+            return BadRequest(Result.Failure("O nome do projeto é obrigatório."));
+
+        var result = await _claudeService.AnalyzeProjectAsync(request, cancellationToken);
+
+        if (!result.IsSuccess)
+            return BadRequest(Result.Failure(result.Message));
+
+        var response = Result<ProjectAnalysisResponse>.Success(
+            new ProjectAnalysisResponse(result.Data!.Overview, result.Data.Risks, result.Data.Recommendations),
             result.Message
         );
 

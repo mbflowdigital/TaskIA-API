@@ -27,6 +27,7 @@ public class CompanyRepository : Repository<Company>, ICompanyRepository
     {
         return await _dbSet
             .Include(c => c.Users.Where(u => u.IsActive))
+            .ThenInclude(u => u.Role)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
 
