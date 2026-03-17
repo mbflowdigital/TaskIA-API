@@ -3,6 +3,7 @@ using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Interfaces;
 
 namespace Application.Core.Services;
@@ -149,7 +150,9 @@ public class CompanyService : ICompanyService
                     Phone = u.Phone,
                     CPF = u.CPF,
                     BirthDate = u.BirthDate,
-                    Role = u.Role.ToString(),
+                    Role = u.Role?.RoleName ?? (Enum.IsDefined(typeof(UserRole), u.RoleId)
+                        ? ((UserRole)u.RoleId).ToString()
+                        : UserRole.USER.ToString()),
                     IsEmailVerified = u.IsEmailVerified,
                     IsFirstAccess = u.IsFirstAccess,
                     IsActive = u.IsActive,
