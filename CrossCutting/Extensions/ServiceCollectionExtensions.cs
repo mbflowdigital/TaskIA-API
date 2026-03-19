@@ -1,4 +1,6 @@
+using CrossCutting.Middleware;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CrossCutting.Extensions;
@@ -10,8 +12,11 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IApplicationBuilder UseCrossCutting(this IApplicationBuilder app)
+    public static IApplicationBuilder UseCrossCutting(this IApplicationBuilder app, IWebHostEnvironment env)
     {
+        // Configurar tratamento global de exceções
+        app.ConfigureExceptionHandler(env);
+        
         return app;
     }
 }

@@ -6,10 +6,15 @@ namespace Application.Core.DTOs.Users;
 public record UserDto
 {
     public Guid Id { get; init; }
+    public Guid? CompanyId { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string? Phone { get; init; }
+    public string CPF { get; init; } = string.Empty;
+    public DateTime BirthDate { get; init; }
+    public string Role { get; init; } = "USER";
     public bool IsEmailVerified { get; init; }
+    public bool IsFirstAccess { get; init; }
     public bool IsActive { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
@@ -21,7 +26,10 @@ public record UserDto
 public record CreateUserRequest(
     string Name,
     string Email,
-    string? Phone = null
+    string CPF,
+    DateTime BirthDate,
+    string? Phone = null,
+    string? Role = null
 );
 
 /// <summary>
@@ -31,7 +39,24 @@ public record UpdateUserRequest(
     Guid Id,
     string Name,
     string? Phone = null
-);
+)
+{
+};
+
+public record ViaCEp(
+    string Cep,
+    string Logradouro,
+    string Complemento,
+    string unidade,
+    string localidade,
+    string uf,
+    string estado,
+    string regioao,
+    string ibge,
+    string gia,
+    string ddd,
+    string siafi)
+{};
 
 /// <summary>
 /// Request para buscar usuário por ID

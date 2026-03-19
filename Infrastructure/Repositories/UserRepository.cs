@@ -16,12 +16,38 @@ public class UserRepository : Repository<User>, IUserRepository
     {
     }
 
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.AnyAsync(cancellationToken);
+    }
+
     /// <summary>
-    /// Busca usuário por email
+    /// Override: Sempre carrega Role junto com User
+    /// </summary>
+    public override async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Override: Sempre carrega Role junto com User
+    /// </summary>
+    public override async Task<IEnumerable<User>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Busca usuário por email com Role
     /// </summary>
     public async Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         return await _dbSet
+            .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Email == email.ToLower(), cancellationToken);
     }
 
@@ -32,6 +58,41 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .AnyAsync(u => u.Email == email.ToLower(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Busca usuário por CPF
+    /// </summary>
+    public async Task<User?> GetByCPFAsync(string cpf, CancellationToken cancellationToken = default)
+    {
+        var normalizedCPF = cpf.Replace(".", "").Replace("-", "").Trim();
+        
+        return await _dbSet
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.CPF == normalizedCPF && u.IsActive, cancellationToken);
+    }
+
+    /// <summary>
+    /// Verifica se CPF já existe no banco
+    /// </summary>
+    public async Task<bool> CPFExistsAsync(string cpf, CancellationToken cancellationToken = default)
+    {
+        var normalizedCPF = cpf.Replace(".", "").Replace("-", "").Trim();
+        
+        return await _dbSet
+            .AnyAsync(u => u.CPF == normalizedCPF, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lista usuários de uma empresa específica
+    /// </summary>
+    public async Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .Where(u => u.CompanyId == companyId)
+            .OrderBy(u => u.Name)
+            .ToListAsync(cancellationToken);
     }
 
     // TODO: Exemplo de método específico que pode ser adicionado

@@ -1,7 +1,10 @@
 using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
+using Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Application.Controllers;
 
@@ -11,6 +14,7 @@ namespace Application.Controllers;
 /// Seguindo Dependency Inversion Principle (SOLID)
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class UsersController : ControllerBase
@@ -37,7 +41,22 @@ public class UsersController : ControllerBase
         [FromBody] CreateUserRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await _userService.CreateAsync(request, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        // Verificar permissão via Claims (ativo quando JWT estiver implementado)
+        var roleClaim = actorRole?.ToString();
+        if (!string.IsNullOrWhiteSpace(roleClaim) &&
+            Enum.TryParse<UserRole>(roleClaim, ignoreCase: true, out var claimRole) &&
+            claimRole == UserRole.USER)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Usuários padrão não podem criar outros usuários."));
+        }
+
+        var result = await _userService.CreateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -51,7 +70,11 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(Result<IEnumerable<UserDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var result = await _userService.GetAllAsync(cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.GetAllAsync(actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -70,7 +93,11 @@ public class UsersController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _userService.GetByIdAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.GetByIdAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -96,7 +123,11 @@ public class UsersController : ControllerBase
             return BadRequest(Result.Failure("ID da URL diferente do ID do corpo da requisição"));
         }
 
-        var result = await _userService.UpdateAsync(request, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.UpdateAsync(request, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -115,7 +146,11 @@ public class UsersController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await _userService.DeleteAsync(id, cancellationToken);
+        var (actorUserId, actorRole) = GetActorContext();
+        var adminCheck = EnsureAdminRole(actorRole);
+        if (adminCheck != null) return adminCheck;
+
+        var result = await _userService.DeleteAsync(id, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -141,6 +176,25 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Consulta endereço pelo CEP via ViaCEP
+    /// </summary>
+    /// <param name="cep">CEP a ser consultado (ex: 01001-000 ou 01001000)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Dados do endereço</returns>
+    /// <response code="200">CEP consultado com sucesso</response>
+    /// <response code="400">CEP inválido ou não encontrado</response>
+    [HttpGet("cep/{cep}")]
+    [ProducesResponseType(typeof(Result<ViaCEp>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAddressByCep(
+        string cep,
+        CancellationToken cancellationToken)
+    {
+        var result = await _userService.GetAddressByCepAsync(cep, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Verifica se email já está cadastrado
     /// </summary>
     /// <param name="email">Email para verificar</param>
@@ -159,5 +213,45 @@ public class UsersController : ControllerBase
 
         var exists = await _userService.EmailExistsAsync(email, cancellationToken);
         return Ok(new { exists, message = exists ? "Email já cadastrado" : "Email disponível" });
+    }
+
+    private (Guid? ActorUserId, UserRole? ActorRole) GetActorContext()
+    {
+        var userIdRaw =
+            User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+            User.FindFirst("sub")?.Value ??
+            Request.Headers["X-User-Id"].FirstOrDefault();
+
+        var roleRaw =
+            User.FindFirst(ClaimTypes.Role)?.Value ??
+            Request.Headers["X-User-Role"].FirstOrDefault();
+
+        Guid? actorUserId = null;
+        if (!string.IsNullOrWhiteSpace(userIdRaw) && Guid.TryParse(userIdRaw, out var parsedId))
+            actorUserId = parsedId;
+
+        UserRole? actorRole = null;
+        if (!string.IsNullOrWhiteSpace(roleRaw) && Enum.TryParse<UserRole>(roleRaw, true, out var parsedRole))
+            actorRole = parsedRole;
+
+        return (actorUserId, actorRole);
+    }
+
+    private IActionResult? EnsureAdminRole(UserRole? actorRole)
+    {
+        if (!actorRole.HasValue)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Perfil do usuário não identificado para esta operação."));
+        }
+
+        var isAdmin = actorRole == UserRole.ADM || actorRole == UserRole.ADM_MASTER;
+        if (!isAdmin)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Apenas administradores podem acessar este recurso."));
+        }
+
+        return null;
     }
 }
