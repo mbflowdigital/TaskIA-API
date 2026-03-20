@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Domain.Common;
+using Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services;
@@ -32,7 +33,8 @@ public class ClaudeService
     public ClaudeService(HttpClient httpClient, IConfiguration configuration)
     {
         _httpClient = httpClient;
-        _apiKey = configuration["Claude:ApiKey"] ?? throw new InvalidOperationException("Claude:ApiKey não configurado.");
+        var rawKey = configuration["Claude:ApiKey"] ?? throw new InvalidOperationException("Claude:ApiKey não configurado.");
+        _apiKey = AesProtector.Decrypt(rawKey);
         _model = configuration["Claude:Model"] ?? "claude-sonnet-4-5";
         _baseUrl = configuration["Claude:BaseUrl"] ?? "https://api.anthropic.com/v1";
     }
