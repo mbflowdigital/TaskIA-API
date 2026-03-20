@@ -10,7 +10,10 @@ namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
 public record ProjectAnalysis(string Overview, string Risks, string Recommendations);
-public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover);
+public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
+public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
+public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
+public record UnavailablePeriodInput(string StartDate, string EndDate, string? Reason);
 public record ProjectAnalysisInput(
     string ProjectName,
     string Objective,
@@ -20,7 +23,19 @@ public record ProjectAnalysisInput(
     string Company,
     string Department,
     string ProjectType,
-    List<TeamMemberInput> TeamMembers
+    List<TeamMemberInput> TeamMembers,
+    string? HasExternalDependencies,
+    List<ExternalDependencyInput>? ExternalDependencies,
+    string? BudgetType,
+    string? BudgetValue,
+    string? WorkSchedule,
+    string? DowntimePolicy,
+    string? DowntimeLimitHours,
+    string? HasIntegrations,
+    List<IntegrationInput>? Integrations,
+    List<string>? Compliance,
+    List<string>? ComplianceApprovers,
+    List<UnavailablePeriodInput>? UnavailablePeriods
 );
 
 public class ClaudeService
@@ -236,7 +251,51 @@ public class ClaudeService
         var membersText = data.TeamMembers.Count == 0
             ? "Nenhum membro selecionado."
             : string.Join("\n", data.TeamMembers.Select(m =>
-                $"  - {m.UserName}: {m.Role}, {m.Dedication}{(m.IsApprover ? " (Aprovador)" : "")}"));
+                $"  - {m.UserName}: {m.Role}, {m.Dedication}{(m.IsApprover ? " (Aprovador)" : "")}{(string.IsNullOrWhiteSpace(m.RoleDescription) ? "" : $" | Descrição: {m.RoleDescription}")}"));
+
+        var depsText = data.HasExternalDependencies == "yes" && data.ExternalDependencies?.Count > 0
+            ? string.Join("\n", data.ExternalDependencies.Select(d =>
+                $"  - {d.Name}: {d.WhatIsNeeded}, Criticidade: {d.Criticality}{(string.IsNullOrWhiteSpace(d.Deadline) ? "" : $", Prazo: {d.Deadline}")}"))
+            : "Nenhuma";
+
+        var budgetText = data.BudgetType switch
+        {
+            "fixed" => $"Valor fixo: R$ {data.BudgetValue}",
+            "tbd" => "A definir",
+            _ => "Sem limite"
+        };
+
+        var workText = data.WorkSchedule switch
+        {
+            "flexible" => "Flexível",
+            "off-hours" => "Fora do expediente",
+            _ => "Comercial"
+        };
+
+        var downtimeText = data.DowntimePolicy switch
+        {
+            "limited" => $"Até {data.DowntimeLimitHours ?? "?"} horas",
+            "zero" => "Zero downtime",
+            _ => "Não se aplica"
+        };
+
+        var intgText = data.HasIntegrations == "yes" && data.Integrations?.Count > 0
+            ? string.Join("\n", data.Integrations.Select(i =>
+                $"  - {i.SystemName} ({i.Type}), Criticidade: {i.Criticality}, Status: {(i.Status == "to-create" ? "A criar" : "Já existe")}"))
+            : "Nenhuma";
+
+        var complianceText = data.Compliance?.Count > 0
+            ? string.Join(", ", data.Compliance)
+            : "Nenhum";
+
+        var approversText = data.ComplianceApprovers?.Count > 0
+            ? string.Join(", ", data.ComplianceApprovers)
+            : "Nenhum";
+
+        var periodsText = data.UnavailablePeriods?.Count > 0
+            ? string.Join("\n", data.UnavailablePeriods.Select(p =>
+                $"  - {p.StartDate} a {p.EndDate}{(string.IsNullOrWhiteSpace(p.Reason) ? "" : $": {p.Reason}")}"))
+            : "Nenhum";
 
         return $$"""
             Você é um consultor especialista em gerenciamento de projetos. Analise o projeto abaixo e forneça uma análise detalhada em português brasileiro.
@@ -253,6 +312,19 @@ public class ClaudeService
 
             === EQUIPE ===
             {{membersText}}
+
+            === CONTEXTO E RESTRIÇÕES ===
+            Dependências externas:
+            {{depsText}}
+            Orçamento: {{budgetText}}
+            Horário de trabalho: {{workText}}
+            Downtime permitido: {{downtimeText}}
+            Integrações:
+            {{intgText}}
+            Compliance: {{complianceText}}
+            Aprovadores de compliance: {{approversText}}
+            Períodos indisponíveis:
+            {{periodsText}}
 
             Responda SOMENTE no seguinte formato JSON (sem markdown, sem explicações adicionais):
             {
