@@ -60,9 +60,34 @@ public class ProjectService : IProjectService
                 Status = string.IsNullOrEmpty(request.Status) ? "Draft" : request.Status,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
+                ResponsibleSector = request.ResponsibleSector,
+                ProjectType = request.ProjectType,
                 UserId = request.UserId,
                 CompanyId = projectCompanyId
             };
+
+            // Adicionar membros ao projeto
+            if (request.Members != null && request.Members.Any())
+            {
+                foreach (var memberRequest in request.Members)
+                {
+                    // Validar se o usuário existe
+                    var memberUserExists = await _projectRepository.UserExistsAsync(memberRequest.UserId, cancellationToken);
+                    if (!memberUserExists);
+
+                    var member = new ProjectMemberEntity
+                    {
+                        ProjectId = project.Id,
+                        UserId = memberRequest.UserId,
+                        ProjectFunction = memberRequest.ProjectFunction,
+                        Dedication = memberRequest.Dedication,
+                        Approver = memberRequest.Approver,
+                        FunctionDescription = memberRequest.FunctionDescription
+                    };
+
+                    project.ProjectMembers.Add(member);
+                }
+            }
 
             await _projectRepository.AddAsync(project, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
@@ -159,7 +184,7 @@ public class ProjectService : IProjectService
                     return Result<ProjectDto>.Failure("Nome de projeto já cadastrado. Escolha outro nome.");
             }
 
-            project.UpdateInfo(request.Name, request.Objective, request.Description, request.StartDate, request.EndDate);
+            project.UpdateInfo(request.Name, request.Objective, request.Description, request.StartDate, request.EndDate, request.ResponsibleSector, request.ProjectType);
             project.UpdateStatus(request.Status);
 
             await _projectRepository.UpdateAsync(project, cancellationToken);
@@ -332,11 +357,28 @@ public class ProjectService : IProjectService
             Status = project.Status,
             StartDate = project.StartDate,
             EndDate = project.EndDate,
+            ResponsibleSector = project.ResponsibleSector,
+            ProjectType = project.ProjectType,
             UserId = project.UserId,
             UserName = project.User?.Name,
             IsActive = project.IsActive,
             CreatedAt = project.CreatedAt,
-            UpdatedAt = project.UpdatedAt
+            UpdatedAt = project.UpdatedAt,
+            Members = project.ProjectMembers?
+                .Where(m => m.IsActive)
+                .Select(m => new ProjectMemberDto
+                {
+                    Id = m.Id,
+                    UserId = m.UserId,
+                    UserName = m.User?.Name,
+                    ProjectFunction = m.ProjectFunction,
+                    Dedication = m.Dedication,
+                    Approver = m.Approver,
+                    FunctionDescription = m.FunctionDescription,
+                    IsActive = m.IsActive,
+                    CreatedAt = m.CreatedAt
+                }).ToList() ?? new List<ProjectMemberDto>(),
+            Details = project.ProjectDetails?.ToDto()
         };
     }
 
@@ -356,5 +398,456 @@ public class ProjectService : IProjectService
             return Result<User?>.Failure("Usuário sem empresa vinculada não pode acessar projetos de empresa.");
 
         return Result<User?>.Success(actor);
+    }
+
+
+    public async Task<Result<ProjectMemberDto>> AddMemberAsync(
+        Guid projectId,
+        CreateProjectMemberRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectMemberDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectMemberDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectMemberDto>.Failure("Sem permissão para adicionar membros a projeto de outra empresa.");
+
+            var memberUserExists = await _projectRepository.UserExistsAsync(request.UserId, cancellationToken);
+            if (!memberUserExists)
+                return Result<ProjectMemberDto>.Failure("Usuário do membro não encontrado.");
+
+            // Verificar se o usuário já é membro do projeto
+            if (project.ProjectMembers.Any(m => m.UserId == request.UserId && m.IsActive))
+                return Result<ProjectMemberDto>.Failure("Usuário já é membro deste projeto.");
+
+            var member = new ProjectMemberEntity
+            {
+                ProjectId = projectId,
+                UserId = request.UserId,
+                ProjectFunction = request.ProjectFunction,
+                Dedication = request.Dedication,
+                Approver = request.Approver,
+                FunctionDescription = request.FunctionDescription
+            };
+
+            project.AddMember(member);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            // Recarregar com dados do usuário
+            var memberUser = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+
+            var memberDto = new ProjectMemberDto
+            {
+                Id = member.Id,
+                UserId = member.UserId,
+                UserName = memberUser?.Name,
+                ProjectFunction = member.ProjectFunction,
+                Dedication = member.Dedication,
+                Approver = member.Approver,
+                FunctionDescription = member.FunctionDescription,
+                IsActive = member.IsActive,
+                CreatedAt = member.CreatedAt
+            };
+
+            return Result<ProjectMemberDto>.Success(memberDto, "Membro adicionado ao projeto com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectMemberDto>.Failure($"Erro ao adicionar membro ao projeto: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> RemoveMemberAsync(
+        Guid projectId,
+        Guid memberId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result.Failure("Sem permissão para remover membros de projeto de outra empresa.");
+
+            project.RemoveMember(memberId);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Membro removido do projeto com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Erro ao remover membro do projeto: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IEnumerable<ProjectMemberDto>>> GetProjectMembersAsync(
+        Guid projectId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<IEnumerable<ProjectMemberDto>>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<IEnumerable<ProjectMemberDto>>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<IEnumerable<ProjectMemberDto>>.Failure("Sem permissão para visualizar membros de projeto de outra empresa.");
+
+            var membersDto = project.ProjectMembers
+                .Where(m => m.IsActive)
+                .Select(m => new ProjectMemberDto
+                {
+                    Id = m.Id,
+                    UserId = m.UserId,
+                    UserName = m.User?.Name,
+                    ProjectFunction = m.ProjectFunction,
+                    Dedication = m.Dedication,
+                    Approver = m.Approver,
+                    FunctionDescription = m.FunctionDescription,
+                    IsActive = m.IsActive,
+                    CreatedAt = m.CreatedAt
+                }).ToList();
+
+            return Result<IEnumerable<ProjectMemberDto>>.Success(membersDto);
+        }
+        catch (Exception ex)
+        {
+            return Result<IEnumerable<ProjectMemberDto>>.Failure($"Erro ao buscar membros do projeto: {ex.Message}");
+        }
+    }
+
+  
+
+    public async Task<Result<ProjectDetailsDto>> CreateProjectDetailsAsync(
+        Guid projectId,
+        CreateProjectDetailsRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectDetailsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectDetailsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectDetailsDto>.Failure("Sem permissão para adicionar detalhes a projeto de outra empresa.");
+
+            if (project.ProjectDetails != null)
+                return Result<ProjectDetailsDto>.Failure("Projeto já possui detalhes cadastrados. Use a operação de atualização.");
+
+            var details = new ProjectDetails
+            {
+                ProjectId = projectId,
+                TemDependenciasExternas = request.TemDependenciasExternas,
+                TemIntegracoes = request.TemIntegracoes,
+                Orcamento = request.Orcamento,
+                HorarioTrabalho = request.HorarioTrabalho,
+                DowntimePermitido = request.DowntimePermitido
+            };
+
+            // Adicionar compliances
+            foreach (var complianceRequest in request.Compliances)
+            {
+                var compliance = new ProjectCompliance
+                {
+                    TipoCompliance = complianceRequest.TipoCompliance,
+                    Observacoes = complianceRequest.Observacoes
+                };
+                details.Compliances.Add(compliance);
+            }
+
+            // Adicionar períodos indisponíveis
+            foreach (var periodRequest in request.UnavailablePeriods)
+            {
+                if (periodRequest.DataFim < periodRequest.DataInicio)
+                    continue;
+
+                var period = new ProjectUnavailablePeriod
+                {
+                    DataInicio = periodRequest.DataInicio,
+                    DataFim = periodRequest.DataFim,
+                    Motivo = periodRequest.Motivo
+                };
+                details.UnavailablePeriods.Add(period);
+            }
+
+            // Associar detalhes ao projeto diretamente via repositório
+            await _projectRepository.AddProjectDetailsAsync(details, cancellationToken);
+
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            // Recarregar os detalhes com os dados atualizados
+            var savedDetails = await _projectRepository.GetProjectDetailsByProjectIdAsync(projectId, cancellationToken);
+
+            return Result<ProjectDetailsDto>.Success(savedDetails!.ToDto(), "Detalhes do projeto criados com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectDetailsDto>.Failure($"Erro ao criar detalhes do projeto: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectDetailsDto>> UpdateProjectDetailsAsync(
+        Guid projectId,
+        UpdateProjectDetailsRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectDetailsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectDetailsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectDetailsDto>.Failure("Sem permissão para atualizar detalhes de projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result<ProjectDetailsDto>.Failure("Projeto não possui detalhes cadastrados.");
+
+            project.ProjectDetails.UpdateOperationalSettings(
+                request.TemDependenciasExternas,
+                request.TemIntegracoes,
+                request.Orcamento,
+                request.HorarioTrabalho,
+                request.DowntimePermitido
+            );
+
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result<ProjectDetailsDto>.Success(project.ProjectDetails.ToDto(), "Detalhes do projeto atualizados com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectDetailsDto>.Failure($"Erro ao atualizar detalhes do projeto: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectDetailsDto>> GetProjectDetailsAsync(
+        Guid projectId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectDetailsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectDetailsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectDetailsDto>.Failure("Sem permissão para visualizar detalhes de projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result<ProjectDetailsDto>.Failure("Projeto não possui detalhes cadastrados.");
+
+            return Result<ProjectDetailsDto>.Success(project.ProjectDetails.ToDto());
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectDetailsDto>.Failure($"Erro ao buscar detalhes do projeto: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectComplianceDto>> AddComplianceAsync(
+        Guid projectId,
+        CreateProjectComplianceRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectComplianceDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectComplianceDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectComplianceDto>.Failure("Sem permissão para adicionar compliance a projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result<ProjectComplianceDto>.Failure("Projeto não possui detalhes cadastrados. Crie os detalhes primeiro.");
+
+            var compliance = new ProjectCompliance
+            {
+                ProjectDetailsId = project.ProjectDetails.Id,
+                TipoCompliance = request.TipoCompliance,
+                Observacoes = request.Observacoes
+            };
+
+            await _projectRepository.AddComplianceAsync(compliance, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result<ProjectComplianceDto>.Success(compliance.ToDto(), "Compliance adicionado com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectComplianceDto>.Failure($"Erro ao adicionar compliance: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> RemoveComplianceAsync(
+        Guid projectId,
+        Guid complianceId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result.Failure("Sem permissão para remover compliance de projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result.Failure("Projeto não possui detalhes cadastrados.");
+
+            project.ProjectDetails.RemoveCompliance(complianceId);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Compliance removido com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Erro ao remover compliance: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectUnavailablePeriodDto>> AddUnavailablePeriodAsync(
+        Guid projectId,
+        CreateProjectUnavailablePeriodRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectUnavailablePeriodDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectUnavailablePeriodDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectUnavailablePeriodDto>.Failure("Sem permissão para adicionar período indisponível a projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result<ProjectUnavailablePeriodDto>.Failure("Projeto não possui detalhes cadastrados. Crie os detalhes primeiro.");
+
+            if (request.DataFim < request.DataInicio)
+                return Result<ProjectUnavailablePeriodDto>.Failure("Data fim não pode ser anterior à data início.");
+
+            var period = new ProjectUnavailablePeriod
+            {
+                ProjectDetailsId = project.ProjectDetails.Id,
+                DataInicio = request.DataInicio,
+                DataFim = request.DataFim,
+                Motivo = request.Motivo
+            };
+
+            await _projectRepository.AddUnavailablePeriodAsync(period, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result<ProjectUnavailablePeriodDto>.Success(period.ToDto(), "Período indisponível adicionado com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectUnavailablePeriodDto>.Failure($"Erro ao adicionar período indisponível: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> RemoveUnavailablePeriodAsync(
+        Guid projectId,
+        Guid periodId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result.Failure("Sem permissão para remover período indisponível de projeto de outra empresa.");
+
+            if (project.ProjectDetails == null)
+                return Result.Failure("Projeto não possui detalhes cadastrados.");
+
+            project.ProjectDetails.RemoveUnavailablePeriod(periodId);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Período indisponível removido com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Erro ao remover período indisponível: {ex.Message}");
+        }
     }
 }

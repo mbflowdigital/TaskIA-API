@@ -20,6 +20,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<Company> Companies { get; set; } = null!;
     public DbSet<RoleEntity> Roles { get; set; } = null!;
     public DbSet<PositionsEntity> Positions { get; set; } = null!;
+    public DbSet<ProjectMemberEntity> ProjectMembers { get; set; } = null;
+    public DbSet<ProjectDetails> ProjectDetails { get; set; } = null!;
+    public DbSet<ProjectCompliance> ProjectCompliances { get; set; } = null!;
+    public DbSet<ProjectUnavailablePeriod> ProjectUnavailablePeriods { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -115,12 +119,86 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Restrict); // Não permite deletar usuário se tiver projetos
 
+        // Configurar relacionamento Project -> ProjectMembers (1:N)
+        modelBuilder.Entity<Project>()
+            .HasMany(p => p.ProjectMembers)
+            .WithOne(pm => pm.Project)
+            .HasForeignKey(pm => pm.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta membros ao deletar projeto
+
+        // Configurar relacionamento User -> ProjectMembers (1:N)
+        modelBuilder.Entity<User>()
+            .HasMany<ProjectMemberEntity>()
+            .WithOne(pm => pm.User)
+            .HasForeignKey(pm => pm.UserId)
+            .OnDelete(DeleteBehavior.Restrict); // Não permite deletar usuário se for membro de projeto
+
+        // Índice composto para garantir que um usuário não seja adicionado duas vezes ao mesmo projeto
+        modelBuilder.Entity<ProjectMemberEntity>()
+            .HasIndex(pm => new { pm.ProjectId, pm.UserId })
+            .IsUnique();
+
         // Índices para performance
         modelBuilder.Entity<Project>()
             .HasIndex(p => p.UserId);
 
         modelBuilder.Entity<Project>()
             .HasIndex(p => p.Status);
+
+        // ========================================================================
+        // Configuração de ProjectDetails e relacionamentos
+        // ========================================================================
+
+        // Relacionamento Project -> ProjectDetails (1:1)
+        modelBuilder.Entity<Project>()
+            .HasOne(p => p.ProjectDetails)
+            .WithOne(pd => pd.Project)
+            .HasForeignKey<ProjectDetails>(pd => pd.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta detalhes ao deletar projeto
+
+        // Relacionamento ProjectDetails -> ProjectCompliance (1:N)
+        modelBuilder.Entity<ProjectDetails>()
+            .HasMany(pd => pd.Compliances)
+            .WithOne(pc => pc.ProjectDetails)
+            .HasForeignKey(pc => pc.ProjectDetailsId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta compliances ao deletar detalhes
+
+        // Relacionamento ProjectDetails -> ProjectUnavailablePeriod (1:N)
+        modelBuilder.Entity<ProjectDetails>()
+            .HasMany(pd => pd.UnavailablePeriods)
+            .WithOne(pu => pu.ProjectDetails)
+            .HasForeignKey(pu => pu.ProjectDetailsId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta períodos ao deletar detalhes
+
+        // Índice composto para garantir que um tipo de compliance não seja adicionado duas vezes ao mesmo projeto
+        modelBuilder.Entity<ProjectCompliance>()
+            .HasIndex(pc => new { pc.ProjectDetailsId, pc.TipoCompliance });
+
+        // Índices para ProjectDetails
+        modelBuilder.Entity<ProjectDetails>()
+            .HasIndex(pd => pd.ProjectId)
+            .IsUnique(); // Um projeto só pode ter um ProjectDetails
+
+        // Índices para ProjectUnavailablePeriod
+        modelBuilder.Entity<ProjectUnavailablePeriod>()
+            .HasIndex(pu => new { pu.ProjectDetailsId, pu.DataInicio, pu.DataFim });
+
+        // Configuração de enums como int no banco
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.Orcamento)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.HorarioTrabalho)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.DowntimePermitido)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectCompliance>()
+            .Property(pc => pc.TipoCompliance)
+            .HasConversion<int>();
 
         // Configurações adicionais se necessário
         // Exemplo: modelBuilder.Entity<User>().HasIndex(e => e.Email).IsUnique();

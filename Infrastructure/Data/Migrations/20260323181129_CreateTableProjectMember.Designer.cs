@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260323181129_CreateTableProjectMember")]
+    partial class CreateTableProjectMember
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -203,79 +206,6 @@ namespace Infrastructure.Data.Migrations
                     b.ToTable("Projects");
                 });
 
-            modelBuilder.Entity("Domain.Entities.ProjectCompliance", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Observacoes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid>("ProjectDetailsId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("TipoCompliance")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectDetailsId", "TipoCompliance");
-
-                    b.ToTable("ProjectCompliances");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DowntimePermitido")
-                        .HasColumnType("int");
-
-                    b.Property<int>("HorarioTrabalho")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("Orcamento")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("TemDependenciasExternas")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("TemIntegracoes")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
-
-                    b.ToTable("ProjectDetails");
-                });
-
             modelBuilder.Entity("Domain.Entities.ProjectMemberEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -321,42 +251,6 @@ namespace Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectMembers");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectUnavailablePeriod", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DataFim")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DataInicio")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Motivo")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<Guid>("ProjectDetailsId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectDetailsId", "DataInicio", "DataFim");
-
-                    b.ToTable("ProjectUnavailablePeriods");
                 });
 
             modelBuilder.Entity("Domain.Entities.RoleEntity", b =>
@@ -486,28 +380,6 @@ namespace Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Domain.Entities.ProjectCompliance", b =>
-                {
-                    b.HasOne("Domain.Entities.ProjectDetails", "ProjectDetails")
-                        .WithMany("Compliances")
-                        .HasForeignKey("ProjectDetailsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ProjectDetails");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
-                {
-                    b.HasOne("Domain.Entities.Project", "Project")
-                        .WithOne("ProjectDetails")
-                        .HasForeignKey("Domain.Entities.ProjectDetails", "ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("Domain.Entities.ProjectMemberEntity", b =>
                 {
                     b.HasOne("Domain.Entities.Project", "Project")
@@ -525,17 +397,6 @@ namespace Infrastructure.Data.Migrations
                     b.Navigation("Project");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectUnavailablePeriod", b =>
-                {
-                    b.HasOne("Domain.Entities.ProjectDetails", "ProjectDetails")
-                        .WithMany("UnavailablePeriods")
-                        .HasForeignKey("ProjectDetailsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ProjectDetails");
                 });
 
             modelBuilder.Entity("Domain.Entities.User", b =>
@@ -578,16 +439,7 @@ namespace Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Domain.Entities.Project", b =>
                 {
-                    b.Navigation("ProjectDetails");
-
                     b.Navigation("ProjectMembers");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
-                {
-                    b.Navigation("Compliances");
-
-                    b.Navigation("UnavailablePeriods");
                 });
 
             modelBuilder.Entity("Domain.Entities.RoleEntity", b =>

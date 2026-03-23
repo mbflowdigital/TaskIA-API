@@ -26,10 +26,16 @@ public class Project : BaseEntity
 
     public DateTime? EndDate { get; set; }
 
+    [MaxLength(200)]
+    public string? ResponsibleSector { get; set; }
+
+    [MaxLength(100)]
+    public string? ProjectType { get; set; }
+
     // Relacionamento com User
     [Required]
     public Guid UserId { get; set; }
-    
+
     [ForeignKey(nameof(UserId))]
     public virtual User? User { get; set; }
 
@@ -39,19 +45,27 @@ public class Project : BaseEntity
     [ForeignKey(nameof(CompanyId))]
     public virtual Company? Company { get; set; }
 
+    // Relacionamento com ProjectMembers (membros da equipe do projeto)
+    public virtual ICollection<ProjectMemberEntity> ProjectMembers { get; set; } = new List<ProjectMemberEntity>();
+
+    // Relacionamento com ProjectDetails (detalhes e configurações do projeto)
+    public virtual ProjectDetails? ProjectDetails { get; set; }
+
     // Construtor p�blico
     public Project() { }
 
     /// <summary>
     /// Atualiza informa��es b�sicas do projeto
     /// </summary>
-    public void UpdateInfo(string name, string? objective, string? description, DateTime? startDate, DateTime? endDate)
+    public void UpdateInfo(string name, string? objective, string? description, DateTime? startDate, DateTime? endDate, string? responsibleSector = null, string? projectType = null)
     {
         Name = name;
         Objective = objective;
         Description = description;
         StartDate = startDate;
         EndDate = endDate;
+        ResponsibleSector = responsibleSector;
+        ProjectType = projectType;
         SetUpdatedAt();
     }
 
@@ -102,5 +116,27 @@ public class Project : BaseEntity
     {
         Deactivate();
         SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Adiciona um membro ao projeto
+    /// </summary>
+    public void AddMember(ProjectMemberEntity member)
+    {
+        ProjectMembers.Add(member);
+        SetUpdatedAt();
+    }
+    
+    /// <summary>
+    /// Remove um membro do projeto
+    /// </summary>
+    public void RemoveMember(Guid memberId)
+    {
+        var member = ProjectMembers.FirstOrDefault(m => m.Id == memberId);
+        if (member != null)
+        {
+            member.Deactivate();
+            SetUpdatedAt();
+        }
     }
 }
