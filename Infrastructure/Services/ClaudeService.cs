@@ -35,7 +35,16 @@ public record ProjectAnalysisInput(
     List<IntegrationInput>? Integrations,
     List<string>? Compliance,
     List<string>? ComplianceApprovers,
-    List<UnavailablePeriodInput>? UnavailablePeriods
+    List<UnavailablePeriodInput>? UnavailablePeriods,
+    // Step 4
+    List<string>? PriorityRanking,
+    string? BiggestRisk,
+    string? PreviousExperience,
+    string? WhatWentWell,
+    string? WhatWentWrong,
+    string? DetailLevel,
+    string? ReviewFrequency,
+    string? FinalObservations
 );
 
 public class ClaudeService
@@ -297,6 +306,34 @@ public class ClaudeService
                 $"  - {p.StartDate} a {p.EndDate}{(string.IsNullOrWhiteSpace(p.Reason) ? "" : $": {p.Reason}")}"))
             : "Nenhum";
 
+        var prioritiesText = data.PriorityRanking?.Count > 0
+            ? string.Join(", ", data.PriorityRanking.Select((p, i) => $"{i + 1}. {p}"))
+            : "Não informado";
+
+        var experienceText = data.PreviousExperience switch
+        {
+            "similar" => "Algo similar",
+            "exact" => "Exatamente isso",
+            _ => "Nunca fizemos"
+        };
+
+        var detailText = data.DetailLevel switch
+        {
+            "macro" => "Macro (10–15 tarefas)",
+            "granular" => "Granular (80–150 tarefas)",
+            _ => "Balanceado (30–50 tarefas)"
+        };
+
+        var reviewText = data.ReviewFrequency switch
+        {
+            "biweekly" => "Quinzenal",
+            "monthly" => "Mensal",
+            _ => "Semanal"
+        };
+
+        var biggestRiskText = string.IsNullOrWhiteSpace(data.BiggestRisk) ? "Não informado" : data.BiggestRisk;
+        var observationsText = string.IsNullOrWhiteSpace(data.FinalObservations) ? "Nenhuma" : data.FinalObservations;
+
         return $$"""
             Você é um consultor especialista em gerenciamento de projetos. Analise o projeto abaixo e forneça uma análise detalhada em português brasileiro.
 
@@ -325,6 +362,16 @@ public class ClaudeService
             Aprovadores de compliance: {{approversText}}
             Períodos indisponíveis:
             {{periodsText}}
+
+            === PRIORIDADES E EXPECTATIVAS ===
+            Ranking de prioridades (1 = mais importante): {{prioritiesText}}
+            Maior risco percebido: {{biggestRiskText}}
+            Experiência prévia: {{experienceText}}
+            O que deu certo em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWell) ? "N/A" : data.WhatWentWell)}}
+            O que deu errado em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWrong) ? "N/A" : data.WhatWentWrong)}}
+            Nível de detalhe desejado: {{detailText}}
+            Frequência de revisão: {{reviewText}}
+            Observações finais: {{observationsText}}
 
             Responda SOMENTE no seguinte formato JSON (sem markdown, sem explicações adicionais):
             {
