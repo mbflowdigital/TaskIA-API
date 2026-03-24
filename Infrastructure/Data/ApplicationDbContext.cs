@@ -24,6 +24,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProjectDetails> ProjectDetails { get; set; } = null!;
     public DbSet<ProjectCompliance> ProjectCompliances { get; set; } = null!;
     public DbSet<ProjectUnavailablePeriod> ProjectUnavailablePeriods { get; set; } = null!;
+    public DbSet<ProjectExecutionSettings> ProjectExecutionSettings { get; set; } = null!;
+    public DbSet<ProjectPriorityRanking> ProjectPriorityRankings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,7 +96,7 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(u => u.Position)
                 .WithMany(p => p.Users)
                 .HasForeignKey(u => u.PositionId)
-                .OnDelete(DeleteBehavior.SetNull); // Permite null
+                .OnDelete(DeleteBehavior.SetNull); 
 
             // Define valor padrão para RoleId
             entity.Property(u => u.RoleId)
@@ -200,7 +202,79 @@ public class ApplicationDbContext : DbContext
             .Property(pc => pc.TipoCompliance)
             .HasConversion<int>();
 
-        // Configurações adicionais se necessário
-        // Exemplo: modelBuilder.Entity<User>().HasIndex(e => e.Email).IsUnique();
+        // ========================================================================
+        // Configuração de ProjectExecutionSettings e ProjectPriorityRanking
+        // ========================================================================
+
+        // Relacionamento Project -> ProjectExecutionSettings (1:1)
+        modelBuilder.Entity<ProjectExecutionSettings>(entity =>
+        {
+            entity.ToTable("ProjectExecutionSettings");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.MaiorRisco)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.ExperienciaEquipe)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.NivelDetalhePlano)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.FrequenciaRevisao)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.Observacoes)
+                .HasMaxLength(1000);
+
+            // Um projeto só pode ter um ProjectExecutionSettings
+            entity.HasIndex(e => e.ProjectId)
+                .IsUnique()
+                .HasDatabaseName("IX_ProjectExecutionSettings_ProjectId");
+
+            entity.HasOne(e => e.Project)
+                .WithOne(p => p.ExecutionSettings)
+                .HasForeignKey<ProjectExecutionSettings>(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Relacionamento Project -> ProjectPriorityRankings (1:N)
+        modelBuilder.Entity<ProjectPriorityRanking>(entity =>
+        {
+            entity.ToTable("ProjectPriorityRankings");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.PriorityType)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.Posicao)
+                .IsRequired();
+
+            // Garante que um tipo de prioridade não seja duplicado por projeto
+            entity.HasIndex(e => new { e.ProjectId, e.PriorityType })
+                .IsUnique()
+                .HasDatabaseName("IX_ProjectPriorityRankings_ProjectId_PriorityType");
+
+            // Índice para performance de ordenação
+            entity.HasIndex(e => new { e.ProjectId, e.Posicao })
+                .HasDatabaseName("IX_ProjectPriorityRankings_ProjectId_Posicao");
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.PriorityRankings)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

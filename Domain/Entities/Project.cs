@@ -51,6 +51,12 @@ public class Project : BaseEntity
     // Relacionamento com ProjectDetails (detalhes e configurações do projeto)
     public virtual ProjectDetails? ProjectDetails { get; set; }
 
+    // Relacionamento com ProjectExecutionSettings (prioridades e expectativas do projeto)
+    public virtual ProjectExecutionSettings? ExecutionSettings { get; set; }
+
+    // Relacionamento com ProjectPriorityRankings (ranking de prioridades do projeto)
+    public virtual ICollection<ProjectPriorityRanking> PriorityRankings { get; set; } = new List<ProjectPriorityRanking>();
+
     // Construtor p�blico
     public Project() { }
 
