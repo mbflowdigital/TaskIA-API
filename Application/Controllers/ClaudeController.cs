@@ -7,7 +7,7 @@ namespace Application.Controllers;
 
 public record SuggestProjectRequest(string ProjectName);
 public record ProjectSuggestionResponse(string Description, string Objective);
-public record ProjectAnalysisResponse(string Overview, string Risks, string Recommendations);
+public record ProjectAnalysisResponse(string Overview, string Risks, string Recommendations, string PromptSent);
 
 /// <summary>
 /// Controller de integração com Claude AI
@@ -70,7 +70,7 @@ public class ClaudeController : ControllerBase
             return BadRequest(Result.Failure(result.Message));
 
         var response = Result<ProjectAnalysisResponse>.Success(
-            new ProjectAnalysisResponse(result.Data!.Overview, result.Data.Risks, result.Data.Recommendations),
+            new ProjectAnalysisResponse(result.Data!.Overview, result.Data.Risks, result.Data.Recommendations, result.Data.PromptSent),
             result.Message
         );
 

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
-public record ProjectAnalysis(string Overview, string Risks, string Recommendations);
+public record ProjectAnalysis(string Overview, string Risks, string Recommendations, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
@@ -244,7 +244,7 @@ public class ClaudeService
             });
 
             var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
-            var analysis = ParseAnalysis(text);
+            var analysis = ParseAnalysis(text, prompt);
             return Result<ProjectAnalysis>.Success(analysis, "Análise gerada com sucesso.");
         }
         catch
@@ -335,54 +335,118 @@ public class ClaudeService
         var observationsText = string.IsNullOrWhiteSpace(data.FinalObservations) ? "Nenhuma" : data.FinalObservations;
 
         return $$"""
-            Você é um consultor especialista em gerenciamento de projetos. Analise o projeto abaixo e forneça uma análise detalhada em português brasileiro.
+            Você é um consultor sênior especialista em gerenciamento de projetos, análise de riscos e planejamento estratégico. 
+            Sua missão é analisar profundamente o projeto descrito abaixo e fornecer insights valiosos, identificando:
+            - Viabilidade real considerando recursos, prazos e complexidade
+            - Riscos técnicos, humanos, de negócio e externos
+            - Recomendações práticas e acionáveis para maximizar o sucesso do projeto
 
-            === DADOS DO PROJETO ===
-            Nome: {{data.ProjectName}}
+            Considere o perfil da equipe, suas experiências passadas, restrições operacionais e o contexto completo do projeto.
+            Seja específico, objetivo e estratégico nas suas análises.
+
+            ═══════════════════════════════════════════════════════════════════
+            📋 INFORMAÇÕES GERAIS DO PROJETO
+            ═══════════════════════════════════════════════════════════════════
+
+            Nome do Projeto: {{data.ProjectName}}
             Objetivo: {{data.Objective}}
-            Data de início: {{data.StartDate}}
-            Data de término: {{endDateText}}
-            Descrição: {{descriptionText}}
-            Empresa: {{data.Company}}
-            Departamento: {{data.Department}}
-            Tipo de projeto: {{data.ProjectType}}
+            Descrição Detalhada: {{descriptionText}}
 
-            === EQUIPE ===
+            📅 Cronograma:
+              • Data de Início: {{data.StartDate}}
+              • Data de Término: {{endDateText}}
+
+            🏢 Contexto Organizacional:
+              • Empresa: {{data.Company}}
+              • Departamento: {{data.Department}}
+              • Tipo de Projeto: {{data.ProjectType}}
+
+            ═══════════════════════════════════════════════════════════════════
+            👥 COMPOSIÇÃO DA EQUIPE E RESPONSABILIDADES
+            ═══════════════════════════════════════════════════════════════════
+
             {{membersText}}
 
-            === CONTEXTO E RESTRIÇÕES ===
-            Dependências externas:
+            💡 ANÁLISE REQUERIDA: Avalie se a equipe possui:
+              - Seniority adequada para o escopo
+              - Dedicação suficiente considerando o prazo
+              - Papéis bem distribuídos (evitando sobrecarga)
+              - Aprovadores estrategicamente posicionados
+
+            ═══════════════════════════════════════════════════════════════════
+            ⚙️ CONTEXTO OPERACIONAL E RESTRIÇÕES
+            ═══════════════════════════════════════════════════════════════════
+
+            💰 Orçamento:
+              {{budgetText}}
+
+            ⏰ Regime de Trabalho:
+              {{workText}}
+
+            🚨 Política de Downtime:
+              {{downtimeText}}
+
+            🔗 Dependências Externas:
             {{depsText}}
-            Orçamento: {{budgetText}}
-            Horário de trabalho: {{workText}}
-            Downtime permitido: {{downtimeText}}
-            Integrações:
+
+            🔌 Integrações Necessárias:
             {{intgText}}
-            Compliance: {{complianceText}}
-            Aprovadores de compliance: {{approversText}}
-            Períodos indisponíveis:
+
+            📜 Conformidade e Regulamentações:
+              • Requisitos: {{complianceText}}
+              • Aprovadores de Compliance: {{approversText}}
+
+            🚫 Períodos de Indisponibilidade da Equipe:
             {{periodsText}}
 
-            === PRIORIDADES E EXPECTATIVAS ===
-            Ranking de prioridades (1 = mais importante): {{prioritiesText}}
-            Maior risco percebido: {{biggestRiskText}}
-            Experiência prévia: {{experienceText}}
-            O que deu certo em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWell) ? "N/A" : data.WhatWentWell)}}
-            O que deu errado em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWrong) ? "N/A" : data.WhatWentWrong)}}
-            Nível de detalhe desejado: {{detailText}}
-            Frequência de revisão: {{reviewText}}
-            Observações finais: {{observationsText}}
+            💡 ANÁLISE REQUERIDA: Identifique:
+              - Dependências críticas que podem bloquear o projeto
+              - Conflitos entre prazos de dependências e cronograma
+              - Riscos de disponibilidade da equipe em fases críticas
+              - Impacto das políticas de downtime na estratégia de deploy
 
-            Responda SOMENTE no seguinte formato JSON (sem markdown, sem explicações adicionais):
+            ═══════════════════════════════════════════════════════════════════
+            🎯 PRIORIDADES E CONTEXTO ESTRATÉGICO
+            ═══════════════════════════════════════════════════════════════════
+
+            Ranking de Prioridades: {{prioritiesText}}
+
+            ⚠️ Maior Risco Percebido pela Equipe:
+            {{biggestRiskText}}
+
+            📚 Experiência Prévia da Equipe:
+              • Nível de experiência: {{experienceText}}
+              • O que funcionou bem em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWell) ? "N/A" : data.WhatWentWell)}}
+              • O que não funcionou em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWrong) ? "N/A" : data.WhatWentWrong)}}
+
+            📊 Expectativas de Gestão:
+              • Nível de Detalhe no Planejamento: {{detailText}}
+              • Frequência de Revisão: {{reviewText}}
+
+            📝 Observações Finais do Solicitante:
+            {{observationsText}}
+
+            💡 ANÁLISE REQUERIDA:
+              - Compare as prioridades declaradas com os riscos identificados
+              - Identifique se a experiência prévia da equipe é compatível com os desafios
+              - Sugira ajustes no nível de detalhe ou frequência de revisão se necessário
+              - Considere as lições aprendidas para evitar erros recorrentes
+
+            ═══════════════════════════════════════════════════════════════════
+            📤 FORMATO DE RESPOSTA OBRIGATÓRIO
+            ═══════════════════════════════════════════════════════════════════
+
+            Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicionais):
+
             {
-              "overview": "Análise geral do projeto: viabilidade, pontos fortes e contexto em 2-3 frases.",
-              "risks": "Principais riscos identificados, separados por ponto e vírgula.",
-              "recommendations": "Recomendações para o sucesso do projeto, separadas por ponto e vírgula."
+              "overview": "Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Seja objetivo e direto (3-4 frases).",
+              "risks": "Liste os principais riscos identificados separados por ponto e vírgula. Inclua riscos técnicos (arquitetura, integrações, tecnologia), riscos de equipe (disponibilidade, experiência, sobrecarga), riscos de negócio (dependências externas, compliance, orçamento), e riscos de cronograma (prazos apertados, períodos indisponíveis). Seja específico e cite exemplos do contexto fornecido.",
+              "recommendations": "Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático."
             }
             """;
     }
 
-    private static ProjectAnalysis ParseAnalysis(string text)
+    private static ProjectAnalysis ParseAnalysis(string text, string promptSent)
     {
         text = text.Trim();
         if (text.StartsWith("```"))
@@ -401,7 +465,8 @@ public class ClaudeService
         return new ProjectAnalysis(
             parsed?.Overview ?? string.Empty,
             parsed?.Risks ?? string.Empty,
-            parsed?.Recommendations ?? string.Empty
+            parsed?.Recommendations ?? string.Empty,
+            promptSent
         );
     }
 }
