@@ -57,6 +57,15 @@ public class Project : BaseEntity
     // Relacionamento com ProjectPriorityRankings (ranking de prioridades do projeto)
     public virtual ICollection<ProjectPriorityRanking> PriorityRankings { get; set; } = new List<ProjectPriorityRanking>();
 
+    // Relacionamento com ProjectDependencies (dependências externas — ativo quando TemDependenciasExternas = true)
+    public virtual ICollection<ProjectDependencies> Dependencies { get; set; } = new List<ProjectDependencies>();
+
+    // Relacionamento com ProjectIntegrations (integrações — ativo quando TemIntegracoes = true)
+    public virtual ICollection<ProjectIntegrations> Integrations { get; set; } = new List<ProjectIntegrations>();
+
+    // Relacionamento com ProjectSensitiveData (dados sensíveis tratados pelo projeto)
+    public virtual ICollection<ProjectSensitiveData> SensitiveData { get; set; } = new List<ProjectSensitiveData>();
+
     // Construtor p�blico
     public Project() { }
 
@@ -142,6 +151,45 @@ public class Project : BaseEntity
         if (member != null)
         {
             member.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove uma dependência externa do projeto
+    /// </summary>
+    public void RemoveDependency(Guid dependencyId)
+    {
+        var dependency = Dependencies.FirstOrDefault(d => d.Id == dependencyId);
+        if (dependency != null)
+        {
+            dependency.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove uma integração do projeto
+    /// </summary>
+    public void RemoveIntegration(Guid integrationId)
+    {
+        var integration = Integrations.FirstOrDefault(i => i.Id == integrationId);
+        if (integration != null)
+        {
+            integration.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove um dado sensível do projeto
+    /// </summary>
+    public void RemoveSensitiveData(Guid sensitiveDataId)
+    {
+        var data = SensitiveData.FirstOrDefault(s => s.Id == sensitiveDataId);
+        if (data != null)
+        {
+            data.Deactivate();
             SetUpdatedAt();
         }
     }

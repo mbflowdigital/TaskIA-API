@@ -31,6 +31,12 @@ public class ProjectDetails : BaseEntity
     [Required]
     public DowntimeType DowntimePermitido { get; set; } = DowntimeType.NaoSeAplica;
 
+    // Campo condicional: obrigatório quando Orcamento = BudgetType.ValorFixo
+    public decimal? ValorOrcamento { get; set; }
+
+    // Campo condicional: obrigatório quando DowntimePermitido = DowntimeType.AteXHoras
+    public int? HorasDowntime { get; set; }
+
     // Relacionamentos com Compliance e Períodos Indisponíveis
     public virtual ICollection<ProjectCompliance> Compliances { get; set; } = new List<ProjectCompliance>();
 
@@ -47,13 +53,17 @@ public class ProjectDetails : BaseEntity
         bool temIntegracoes,
         BudgetType orcamento,
         WorkScheduleType horarioTrabalho,
-        DowntimeType downtimePermitido)
+        DowntimeType downtimePermitido,
+        decimal? valorOrcamento = null,
+        int? horasDowntime = null)
     {
         TemDependenciasExternas = temDependenciasExternas;
         TemIntegracoes = temIntegracoes;
         Orcamento = orcamento;
         HorarioTrabalho = horarioTrabalho;
         DowntimePermitido = downtimePermitido;
+        ValorOrcamento = valorOrcamento;
+        HorasDowntime = horasDowntime;
         SetUpdatedAt();
     }
 

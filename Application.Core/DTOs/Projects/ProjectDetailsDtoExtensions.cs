@@ -3,14 +3,18 @@ using Domain.Entities;
 namespace Application.Core.DTOs.Projects;
 
 /// <summary>
-/// Métodos de extensão para mapeamento de ProjectDetails
+/// Métodos de extensão para mapeamento de ProjectDetails e entidades relacionadas
 /// </summary>
 public static class ProjectDetailsDtoExtensions
 {
     /// <summary>
-    /// Converte ProjectDetails para ProjectDetailsDto
+    /// Converte ProjectDetails para ProjectDetailsDto, incluindo opcionalmente as coleções do Project
     /// </summary>
-    public static ProjectDetailsDto ToDto(this ProjectDetails details)
+    public static ProjectDetailsDto ToDto(
+        this ProjectDetails details,
+        IEnumerable<ProjectDependencies>? dependencies = null,
+        IEnumerable<ProjectIntegrations>? integrations = null,
+        IEnumerable<ProjectSensitiveData>? sensitiveData = null)
     {
         return new ProjectDetailsDto
         {
@@ -20,10 +24,12 @@ public static class ProjectDetailsDtoExtensions
             TemIntegracoes = details.TemIntegracoes,
             Orcamento = details.Orcamento,
             OrcamentoDescricao = details.Orcamento.ToString(),
+            ValorOrcamento = details.ValorOrcamento,
             HorarioTrabalho = details.HorarioTrabalho,
             HorarioTrabalhoDescricao = details.HorarioTrabalho.ToString(),
             DowntimePermitido = details.DowntimePermitido,
             DowntimePermitidoDescricao = details.DowntimePermitido.ToString(),
+            HorasDowntime = details.HorasDowntime,
             Compliances = details.Compliances?
                 .Where(c => c.IsActive)
                 .Select(c => c.ToDto())
@@ -32,15 +38,21 @@ public static class ProjectDetailsDtoExtensions
                 .Where(p => p.IsActive)
                 .Select(p => p.ToDto())
                 .ToList() ?? new List<ProjectUnavailablePeriodDto>(),
+            Dependencies = dependencies?
+                .Select(d => d.ToDto())
+                .ToList() ?? new List<ProjectDependencyDto>(),
+            Integrations = integrations?
+                .Select(i => i.ToDto())
+                .ToList() ?? new List<ProjectIntegrationDto>(),
+            SensitiveData = sensitiveData?
+                .Select(s => s.ToDto())
+                .ToList() ?? new List<ProjectSensitiveDataDto>(),
             IsActive = details.IsActive,
             CreatedAt = details.CreatedAt,
             UpdatedAt = details.UpdatedAt
         };
     }
 
-    /// <summary>
-    /// Converte ProjectCompliance para ProjectComplianceDto
-    /// </summary>
     public static ProjectComplianceDto ToDto(this ProjectCompliance compliance)
     {
         return new ProjectComplianceDto
@@ -54,9 +66,6 @@ public static class ProjectDetailsDtoExtensions
         };
     }
 
-    /// <summary>
-    /// Converte ProjectUnavailablePeriod para ProjectUnavailablePeriodDto
-    /// </summary>
     public static ProjectUnavailablePeriodDto ToDto(this ProjectUnavailablePeriod period)
     {
         return new ProjectUnavailablePeriodDto
@@ -70,4 +79,51 @@ public static class ProjectDetailsDtoExtensions
             CreatedAt = period.CreatedAt
         };
     }
+
+    public static ProjectDependencyDto ToDto(this ProjectDependencies dependency)
+    {
+        return new ProjectDependencyDto
+        {
+            Id = dependency.Id,
+            ProjectId = dependency.ProjectId,
+            Nome = dependency.Nome,
+            Descricao = dependency.Descricao,
+            Prazo = dependency.Prazo,
+            Criticidade = dependency.Criticidade,
+            IsActive = dependency.IsActive,
+            CreatedAt = dependency.CreatedAt,
+            UpdatedAt = dependency.UpdatedAt
+        };
+    }
+
+    public static ProjectIntegrationDto ToDto(this ProjectIntegrations integration)
+    {
+        return new ProjectIntegrationDto
+        {
+            Id = integration.Id,
+            ProjectId = integration.ProjectId,
+            NomeSistema = integration.NomeSistema,
+            Tipo = integration.Tipo,
+            Criticidade = integration.Criticidade,
+            Status = integration.Status,
+            StatusDescricao = integration.Status.ToString(),
+            IsActive = integration.IsActive,
+            CreatedAt = integration.CreatedAt,
+            UpdatedAt = integration.UpdatedAt
+        };
+    }
+
+    public static ProjectSensitiveDataDto ToDto(this ProjectSensitiveData data)
+    {
+        return new ProjectSensitiveDataDto
+        {
+            Id = data.Id,
+            ProjectId = data.ProjectId,
+            TipoDadoSensivel = data.TipoDadoSensivel,
+            TipoDadoSensivelDescricao = data.TipoDadoSensivel.ToString(),
+            IsActive = data.IsActive,
+            CreatedAt = data.CreatedAt
+        };
+    }
 }
+

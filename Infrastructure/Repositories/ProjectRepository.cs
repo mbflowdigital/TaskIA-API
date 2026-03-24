@@ -115,6 +115,9 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
                 .ThenInclude(pd => pd!.Compliances.Where(c => c.IsActive))
             .Include(p => p.ProjectDetails)
                 .ThenInclude(pd => pd!.UnavailablePeriods.Where(up => up.IsActive))
+            .Include(p => p.Dependencies.Where(d => d.IsActive))
+            .Include(p => p.Integrations.Where(i => i.IsActive))
+            .Include(p => p.SensitiveData.Where(s => s.IsActive))
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
@@ -139,5 +142,20 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
             .Include(pd => pd.Compliances.Where(c => c.IsActive))
             .Include(pd => pd.UnavailablePeriods.Where(up => up.IsActive))
             .FirstOrDefaultAsync(pd => pd.ProjectId == projectId, cancellationToken);
+    }
+
+    public async Task AddDependencyAsync(ProjectDependencies dependency, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectDependencies.AddAsync(dependency, cancellationToken);
+    }
+
+    public async Task AddIntegrationAsync(ProjectIntegrations integration, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectIntegrations.AddAsync(integration, cancellationToken);
+    }
+
+    public async Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectSensitiveData.AddAsync(sensitiveData, cancellationToken);
     }
 }

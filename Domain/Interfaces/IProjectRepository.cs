@@ -21,4 +21,9 @@ public interface IProjectRepository : IRepository<Project>
     Task AddComplianceAsync(ProjectCompliance compliance, CancellationToken cancellationToken = default);
     Task AddUnavailablePeriodAsync(ProjectUnavailablePeriod period, CancellationToken cancellationToken = default);
     Task<ProjectDetails?> GetProjectDetailsByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    // Métodos para entidades de contexto do projeto
+    Task AddDependencyAsync(ProjectDependencies dependency, CancellationToken cancellationToken = default);
+    Task AddIntegrationAsync(ProjectIntegrations integration, CancellationToken cancellationToken = default);
+    Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default);
 }

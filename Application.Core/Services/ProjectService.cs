@@ -378,7 +378,10 @@ public class ProjectService : IProjectService
                     IsActive = m.IsActive,
                     CreatedAt = m.CreatedAt
                 }).ToList() ?? new List<ProjectMemberDto>(),
-            Details = project.ProjectDetails?.ToDto()
+            Details = project.ProjectDetails?.ToDto(
+                project.Dependencies.Where(d => d.IsActive),
+                project.Integrations.Where(i => i.IsActive),
+                project.SensitiveData.Where(s => s.IsActive))
         };
     }
 
@@ -568,14 +571,22 @@ public class ProjectService : IProjectService
             if (project.ProjectDetails != null)
                 return Result<ProjectDetailsDto>.Failure("Projeto já possui detalhes cadastrados. Use a operação de atualização.");
 
+            if (request.Orcamento == BudgetType.ValorFixo && request.ValorOrcamento == null)
+                return Result<ProjectDetailsDto>.Failure("ValorOrcamento é obrigatório quando Orçamento = ValorFixo.");
+
+            if (request.DowntimePermitido == DowntimeType.AteXHoras && request.HorasDowntime == null)
+                return Result<ProjectDetailsDto>.Failure("HorasDowntime é obrigatório quando DowntimePermitido = AteXHoras.");
+
             var details = new ProjectDetails
             {
                 ProjectId = projectId,
                 TemDependenciasExternas = request.TemDependenciasExternas,
                 TemIntegracoes = request.TemIntegracoes,
                 Orcamento = request.Orcamento,
+                ValorOrcamento = request.Orcamento == BudgetType.ValorFixo ? request.ValorOrcamento : null,
                 HorarioTrabalho = request.HorarioTrabalho,
-                DowntimePermitido = request.DowntimePermitido
+                DowntimePermitido = request.DowntimePermitido,
+                HorasDowntime = request.DowntimePermitido == DowntimeType.AteXHoras ? request.HorasDowntime : null
             };
 
             // Adicionar compliances
@@ -592,8 +603,7 @@ public class ProjectService : IProjectService
             // Adicionar períodos indisponíveis
             foreach (var periodRequest in request.UnavailablePeriods)
             {
-                if (periodRequest.DataFim < periodRequest.DataInicio)
-                    continue;
+                if (periodRequest.DataFim < periodRequest.DataInicio);
 
                 var period = new ProjectUnavailablePeriod
                 {
@@ -607,12 +617,69 @@ public class ProjectService : IProjectService
             // Associar detalhes ao projeto diretamente via repositório
             await _projectRepository.AddProjectDetailsAsync(details, cancellationToken);
 
+            // Adicionar dependências externas
+            if (details.TemDependenciasExternas && request.Dependencies.Any())
+            {
+                foreach (var depRequest in request.Dependencies)
+                {
+                    var dependency = new ProjectDependencies
+                    {
+                        ProjectId = projectId,
+                        Nome = depRequest.Nome,
+                        Descricao = depRequest.Descricao,
+                        Prazo = depRequest.Prazo,
+                        Criticidade = depRequest.Criticidade
+                    };
+                    await _projectRepository.AddDependencyAsync(dependency, cancellationToken);
+                }
+            }
+
+            // Adicionar integrações
+            if (details.TemIntegracoes && request.Integrations.Any())
+            {
+                foreach (var intRequest in request.Integrations)
+                {
+                    var integration = new ProjectIntegrations
+                    {
+                        ProjectId = projectId,
+                        NomeSistema = intRequest.NomeSistema,
+                        Tipo = intRequest.Tipo,
+                        Criticidade = intRequest.Criticidade,
+                        Status = intRequest.Status
+                    };
+                    await _projectRepository.AddIntegrationAsync(integration, cancellationToken);
+                }
+            }
+
+            // Adicionar dados sensíveis
+            if (request.SensitiveData.Any())
+            {
+                var temDadosPublicos = details.Compliances.Any(c => c.TipoCompliance == ComplianceType.DadosPublicos);
+                if (temDadosPublicos)
+                    return Result<ProjectDetailsDto>.Failure("Projeto com compliance de Dados Públicos não pode registrar dados sensíveis.");
+
+                var tiposAdicionados = new HashSet<SensitiveDataType>();
+                foreach (var sdRequest in request.SensitiveData)
+                {
+                    if (!tiposAdicionados.Add(sdRequest.TipoDadoSensivel))
+                        continue;
+
+                    var sensitiveData = new ProjectSensitiveData
+                    {
+                        ProjectId = projectId,
+                        TipoDadoSensivel = sdRequest.TipoDadoSensivel
+                    };
+                    await _projectRepository.AddSensitiveDataAsync(sensitiveData, cancellationToken);
+                }
+            }
+
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            // Recarregar os detalhes com os dados atualizados
-            var savedDetails = await _projectRepository.GetProjectDetailsByProjectIdAsync(projectId, cancellationToken);
-
-            return Result<ProjectDetailsDto>.Success(savedDetails!.ToDto(), "Detalhes do projeto criados com sucesso");
+            project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            return Result<ProjectDetailsDto>.Success(project!.ProjectDetails!.ToDto(
+                project.Dependencies.Where(d => d.IsActive),
+                project.Integrations.Where(i => i.IsActive),
+                project.SensitiveData.Where(s => s.IsActive)), "Detalhes do projeto criados com sucesso");
         }
         catch (Exception ex)
         {
@@ -644,17 +711,148 @@ public class ProjectService : IProjectService
             if (project.ProjectDetails == null)
                 return Result<ProjectDetailsDto>.Failure("Projeto não possui detalhes cadastrados.");
 
+            if (request.Orcamento == BudgetType.ValorFixo && request.ValorOrcamento == null)
+                return Result<ProjectDetailsDto>.Failure("ValorOrcamento é obrigatório quando Orçamento = ValorFixo.");
+
+            if (request.DowntimePermitido == DowntimeType.AteXHoras && request.HorasDowntime == null)
+                return Result<ProjectDetailsDto>.Failure("HorasDowntime é obrigatório quando DowntimePermitido = AteXHoras.");
+
             project.ProjectDetails.UpdateOperationalSettings(
                 request.TemDependenciasExternas,
                 request.TemIntegracoes,
                 request.Orcamento,
                 request.HorarioTrabalho,
-                request.DowntimePermitido
+                request.DowntimePermitido,
+                request.Orcamento == BudgetType.ValorFixo ? request.ValorOrcamento : null,
+                request.DowntimePermitido == DowntimeType.AteXHoras ? request.HorasDowntime : null
             );
+
+            // Sincronizar dependências externas
+            if (project.ProjectDetails.TemDependenciasExternas && request.Dependencies.Any())
+            {
+                var nomesRequested = request.Dependencies
+                    .Select(d => d.Nome.Trim().ToLowerInvariant())
+                    .ToHashSet();
+
+                foreach (var dep in project.Dependencies.Where(d => d.IsActive && !nomesRequested.Contains(d.Nome.Trim().ToLowerInvariant())).ToList())
+                    dep.Deactivate();
+
+                foreach (var depRequest in request.Dependencies)
+                {
+                    var existing = project.Dependencies.FirstOrDefault(d => d.Nome.Trim().ToLowerInvariant() == depRequest.Nome.Trim().ToLowerInvariant());
+                    if (existing != null)
+                    {
+                        if (!existing.IsActive)
+                            existing.Activate();
+                        existing.UpdateInfo(depRequest.Nome, depRequest.Descricao, depRequest.Prazo, depRequest.Criticidade);
+                    }
+                    else
+                    {
+                        var dependency = new ProjectDependencies
+                        {
+                            ProjectId = projectId,
+                            Nome = depRequest.Nome,
+                            Descricao = depRequest.Descricao,
+                            Prazo = depRequest.Prazo,
+                            Criticidade = depRequest.Criticidade
+                        };
+                        await _projectRepository.AddDependencyAsync(dependency, cancellationToken);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var dep in project.Dependencies.Where(d => d.IsActive).ToList())
+                    dep.Deactivate();
+            }
+
+            // Sincronizar integrações
+            if (project.ProjectDetails.TemIntegracoes && request.Integrations.Any())
+            {
+                var sistemasRequested = request.Integrations
+                    .Select(i => i.NomeSistema.Trim().ToLowerInvariant())
+                    .ToHashSet();
+
+                foreach (var integration in project.Integrations.Where(i => i.IsActive && !sistemasRequested.Contains(i.NomeSistema.Trim().ToLowerInvariant())).ToList())
+                    integration.Deactivate();
+
+                foreach (var intRequest in request.Integrations)
+                {
+                    var existing = project.Integrations.FirstOrDefault(i => i.NomeSistema.Trim().ToLowerInvariant() == intRequest.NomeSistema.Trim().ToLowerInvariant());
+                    if (existing != null)
+                    {
+                        if (!existing.IsActive)
+                            existing.Activate();
+                        existing.UpdateInfo(intRequest.NomeSistema, intRequest.Tipo, intRequest.Criticidade, intRequest.Status);
+                    }
+                    else
+                    {
+                        var integration = new ProjectIntegrations
+                        {
+                            ProjectId = projectId,
+                            NomeSistema = intRequest.NomeSistema,
+                            Tipo = intRequest.Tipo,
+                            Criticidade = intRequest.Criticidade,
+                            Status = intRequest.Status
+                        };
+                        await _projectRepository.AddIntegrationAsync(integration, cancellationToken);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var integration in project.Integrations.Where(i => i.IsActive).ToList())
+                    integration.Deactivate();
+            }
+
+            // Sincronizar dados sensíveis
+            if (request.SensitiveData.Any())
+            {
+                var temDadosPublicos = project.ProjectDetails.Compliances
+                    .Any(c => c.TipoCompliance == ComplianceType.DadosPublicos && c.IsActive);
+                if (temDadosPublicos)
+                    return Result<ProjectDetailsDto>.Failure("Projeto com compliance de Dados Públicos não pode registrar dados sensíveis.");
+
+                var tiposRequested = request.SensitiveData
+                    .Select(sd => sd.TipoDadoSensivel)
+                    .Distinct()
+                    .ToHashSet();
+
+                foreach (var sd in project.SensitiveData.Where(s => s.IsActive && !tiposRequested.Contains(s.TipoDadoSensivel)).ToList())
+                    sd.Deactivate();
+
+                foreach (var tipo in tiposRequested)
+                {
+                    var existing = project.SensitiveData.FirstOrDefault(s => s.TipoDadoSensivel == tipo);
+                    if (existing != null)
+                    {
+                        if (!existing.IsActive)
+                            existing.Activate();
+                    }
+                    else
+                    {
+                        var sensitiveData = new ProjectSensitiveData
+                        {
+                            ProjectId = projectId,
+                            TipoDadoSensivel = tipo
+                        };
+                        await _projectRepository.AddSensitiveDataAsync(sensitiveData, cancellationToken);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var sd in project.SensitiveData.Where(s => s.IsActive).ToList())
+                    sd.Deactivate();
+            }
 
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            return Result<ProjectDetailsDto>.Success(project.ProjectDetails.ToDto(), "Detalhes do projeto atualizados com sucesso");
+            project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            return Result<ProjectDetailsDto>.Success(project!.ProjectDetails!.ToDto(
+                project.Dependencies.Where(d => d.IsActive),
+                project.Integrations.Where(i => i.IsActive),
+                project.SensitiveData.Where(s => s.IsActive)), "Detalhes do projeto atualizados com sucesso");
         }
         catch (Exception ex)
         {
@@ -685,7 +883,10 @@ public class ProjectService : IProjectService
             if (project.ProjectDetails == null)
                 return Result<ProjectDetailsDto>.Failure("Projeto não possui detalhes cadastrados.");
 
-            return Result<ProjectDetailsDto>.Success(project.ProjectDetails.ToDto());
+            return Result<ProjectDetailsDto>.Success(project.ProjectDetails.ToDto(
+                project.Dependencies.Where(d => d.IsActive),
+                project.Integrations.Where(i => i.IsActive),
+                project.SensitiveData.Where(s => s.IsActive)));
         }
         catch (Exception ex)
         {

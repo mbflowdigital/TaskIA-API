@@ -37,4 +37,5 @@ public interface IProjectService
     // Métodos para gerenciar períodos indisponíveis
     Task<Result<ProjectUnavailablePeriodDto>> AddUnavailablePeriodAsync(Guid projectId, CreateProjectUnavailablePeriodRequest request, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
     Task<Result> RemoveUnavailablePeriodAsync(Guid projectId, Guid periodId, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
-}
+
+    }
