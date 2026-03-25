@@ -31,6 +31,12 @@ public class ProjectExecutionSettings : BaseEntity
     [MaxLength(1000)]
     public string? Observacoes { get; set; }
 
+    [MaxLength(1000)]
+    public string? OQueDeuCerto { get; set; }
+
+    [MaxLength(1000)]
+    public string? OQueDeuErrado { get; set; }
+
     public ProjectExecutionSettings() { }
 
     /// <summary>
@@ -41,13 +47,27 @@ public class ProjectExecutionSettings : BaseEntity
         DetailLevelType nivelDetalhePlano,
         ReviewFrequencyType frequenciaRevisao,
         string? maiorRisco = null,
-        string? observacoes = null)
+        string? observacoes = null,
+        string? oQueDeuCerto = null,
+        string? oQueDeuErrado = null)
     {
         ExperienciaEquipe = experienciaEquipe;
         NivelDetalhePlano = nivelDetalhePlano;
         FrequenciaRevisao = frequenciaRevisao;
         MaiorRisco = maiorRisco;
         Observacoes = observacoes;
+
+        if (experienciaEquipe == ProjectExperienceType.NuncaFizemos)
+        {
+            OQueDeuCerto = null;
+            OQueDeuErrado = null;
+        }
+        else
+        {
+            OQueDeuCerto = oQueDeuCerto;
+            OQueDeuErrado = oQueDeuErrado;
+        }
+
         SetUpdatedAt();
     }
 }

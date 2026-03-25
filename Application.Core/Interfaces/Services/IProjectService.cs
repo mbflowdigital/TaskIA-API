@@ -38,4 +38,11 @@ public interface IProjectService
     Task<Result<ProjectUnavailablePeriodDto>> AddUnavailablePeriodAsync(Guid projectId, CreateProjectUnavailablePeriodRequest request, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
     Task<Result> RemoveUnavailablePeriodAsync(Guid projectId, Guid periodId, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
 
-    }
+    // Métodos para gerenciar configurações de execução do projeto
+    Task<Result<ProjectExecutionSettingsDto>> CreateExecutionSettingsAsync(Guid projectId, CreateProjectExecutionSettingsRequest request, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
+    Task<Result<ProjectExecutionSettingsDto>> UpdateExecutionSettingsAsync(Guid projectId, UpdateProjectExecutionSettingsRequest request, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
+    Task<Result<ProjectExecutionSettingsDto>> GetExecutionSettingsAsync(Guid projectId, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
+
+    // Visão completa do projeto com todos os enums resolvidos para texto
+    Task<Result<ProjectCompleteDto>> GetCompleteAsync(Guid id, Guid? actorUserId, UserRole? actorRole, CancellationToken cancellationToken = default);
+}

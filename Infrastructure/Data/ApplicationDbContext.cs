@@ -242,6 +242,14 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Observacoes)
                 .HasMaxLength(1000);
 
+            entity.Property(e => e.OQueDeuCerto)
+                .HasMaxLength(1000)
+                .HasColumnType("varchar(1000)");
+
+            entity.Property(e => e.OQueDeuErrado)
+                .HasMaxLength(1000)
+                .HasColumnType("varchar(1000)");
+
             // Um projeto só pode ter um ProjectExecutionSettings
             entity.HasIndex(e => e.ProjectId)
                 .IsUnique()

@@ -118,6 +118,8 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
             .Include(p => p.Dependencies.Where(d => d.IsActive))
             .Include(p => p.Integrations.Where(i => i.IsActive))
             .Include(p => p.SensitiveData.Where(s => s.IsActive))
+            .Include(p => p.ExecutionSettings)
+            .Include(p => p.PriorityRankings.Where(r => r.IsActive))
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
@@ -157,5 +159,15 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     public async Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default)
     {
         await _context.ProjectSensitiveData.AddAsync(sensitiveData, cancellationToken);
+    }
+
+    public async Task AddExecutionSettingsAsync(ProjectExecutionSettings settings, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectExecutionSettings.AddAsync(settings, cancellationToken);
+    }
+
+    public async Task AddPriorityRankingAsync(ProjectPriorityRanking ranking, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectPriorityRankings.AddAsync(ranking, cancellationToken);
     }
 }

@@ -26,4 +26,8 @@ public interface IProjectRepository : IRepository<Project>
     Task AddDependencyAsync(ProjectDependencies dependency, CancellationToken cancellationToken = default);
     Task AddIntegrationAsync(ProjectIntegrations integration, CancellationToken cancellationToken = default);
     Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default);
+
+    // Métodos para ExecutionSettings e PriorityRankings
+    Task AddExecutionSettingsAsync(ProjectExecutionSettings settings, CancellationToken cancellationToken = default);
+    Task AddPriorityRankingAsync(ProjectPriorityRanking ranking, CancellationToken cancellationToken = default);
 }

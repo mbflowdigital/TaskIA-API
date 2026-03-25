@@ -381,7 +381,9 @@ public class ProjectService : IProjectService
             Details = project.ProjectDetails?.ToDto(
                 project.Dependencies.Where(d => d.IsActive),
                 project.Integrations.Where(i => i.IsActive),
-                project.SensitiveData.Where(s => s.IsActive))
+                project.SensitiveData.Where(s => s.IsActive)),
+            ExecutionSettings = project.ExecutionSettings?.ToDto(
+                project.PriorityRankings.Where(r => r.IsActive))
         };
     }
 
@@ -1049,6 +1051,224 @@ public class ProjectService : IProjectService
         catch (Exception ex)
         {
             return Result.Failure($"Erro ao remover período indisponível: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectExecutionSettingsDto>> CreateExecutionSettingsAsync(
+        Guid projectId,
+        CreateProjectExecutionSettingsRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectExecutionSettingsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectExecutionSettingsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectExecutionSettingsDto>.Failure("Sem permissão para adicionar configurações a projeto de outra empresa.");
+
+            if (project.ExecutionSettings != null)
+                return Result<ProjectExecutionSettingsDto>.Failure("Projeto já possui configurações de execução. Use a operação de atualização.");
+
+            if (request.ExperienciaEquipe == ProjectExperienceType.AlgoSimilar)
+            {
+                if (string.IsNullOrWhiteSpace(request.OQueDeuCerto))
+                    return Result<ProjectExecutionSettingsDto>.Failure("OQueDeuCerto é obrigatório quando ExperienciaEquipe = AlgoSimilar.");
+                if (string.IsNullOrWhiteSpace(request.OQueDeuErrado))
+                    return Result<ProjectExecutionSettingsDto>.Failure("OQueDeuErrado é obrigatório quando ExperienciaEquipe = AlgoSimilar.");
+            }
+
+            if (request.PrioridadesOrdenadas.Select(p => p.PriorityType).Distinct().Count() != request.PrioridadesOrdenadas.Count)
+                return Result<ProjectExecutionSettingsDto>.Failure("Não é permitido informar o mesmo tipo de prioridade mais de uma vez.");
+
+            var settings = new ProjectExecutionSettings();
+            settings.ProjectId = projectId;
+            settings.UpdateSettings(
+                request.ExperienciaEquipe,
+                request.NivelDetalhePlano,
+                request.FrequenciaRevisao,
+                request.MaiorRisco,
+                request.Observacoes,
+                request.OQueDeuCerto,
+                request.OQueDeuErrado);
+
+            await _projectRepository.AddExecutionSettingsAsync(settings, cancellationToken);
+
+            foreach (var prioRequest in request.PrioridadesOrdenadas.DistinctBy(p => p.PriorityType))
+            {
+                var ranking = new ProjectPriorityRanking
+                {
+                    ProjectId = projectId,
+                    PriorityType = prioRequest.PriorityType,
+                    Posicao = prioRequest.Posicao
+                };
+                await _projectRepository.AddPriorityRankingAsync(ranking, cancellationToken);
+            }
+
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            return Result<ProjectExecutionSettingsDto>.Success(
+                project!.ExecutionSettings!.ToDto(project.PriorityRankings.Where(r => r.IsActive)),
+                "Configurações de execução criadas com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectExecutionSettingsDto>.Failure($"Erro ao criar configurações de execução: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectExecutionSettingsDto>> UpdateExecutionSettingsAsync(
+        Guid projectId,
+        UpdateProjectExecutionSettingsRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectExecutionSettingsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectExecutionSettingsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectExecutionSettingsDto>.Failure("Sem permissão para atualizar configurações de projeto de outra empresa.");
+
+            if (project.ExecutionSettings == null)
+                return Result<ProjectExecutionSettingsDto>.Failure("Projeto não possui configurações de execução. Use a operação de criação.");
+
+            if (request.ExperienciaEquipe == ProjectExperienceType.AlgoSimilar)
+            {
+                if (string.IsNullOrWhiteSpace(request.OQueDeuCerto))
+                    return Result<ProjectExecutionSettingsDto>.Failure("OQueDeuCerto é obrigatório quando ExperienciaEquipe = AlgoSimilar.");
+                if (string.IsNullOrWhiteSpace(request.OQueDeuErrado))
+                    return Result<ProjectExecutionSettingsDto>.Failure("OQueDeuErrado é obrigatório quando ExperienciaEquipe = AlgoSimilar.");
+            }
+
+            if (request.PrioridadesOrdenadas.Select(p => p.PriorityType).Distinct().Count() != request.PrioridadesOrdenadas.Count)
+                return Result<ProjectExecutionSettingsDto>.Failure("Não é permitido informar o mesmo tipo de prioridade mais de uma vez.");
+
+            project.ExecutionSettings.UpdateSettings(
+                request.ExperienciaEquipe,
+                request.NivelDetalhePlano,
+                request.FrequenciaRevisao,
+                request.MaiorRisco,
+                request.Observacoes,
+                request.OQueDeuCerto,
+                request.OQueDeuErrado);
+
+            // Sincronizar prioridades
+            var tiposRequested = request.PrioridadesOrdenadas
+                .Select(p => p.PriorityType)
+                .ToHashSet();
+
+            foreach (var ranking in project.PriorityRankings.Where(r => r.IsActive && !tiposRequested.Contains(r.PriorityType)).ToList())
+                ranking.Deactivate();
+
+            foreach (var prioRequest in request.PrioridadesOrdenadas.DistinctBy(p => p.PriorityType))
+            {
+                var existing = project.PriorityRankings.FirstOrDefault(r => r.PriorityType == prioRequest.PriorityType);
+                if (existing != null)
+                {
+                    if (!existing.IsActive)
+                        existing.Activate();
+                    existing.UpdatePosicao(prioRequest.Posicao);
+                }
+                else
+                {
+                    var ranking = new ProjectPriorityRanking
+                    {
+                        ProjectId = projectId,
+                        PriorityType = prioRequest.PriorityType,
+                        Posicao = prioRequest.Posicao
+                    };
+                    await _projectRepository.AddPriorityRankingAsync(ranking, cancellationToken);
+                }
+            }
+
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            return Result<ProjectExecutionSettingsDto>.Success(
+                project!.ExecutionSettings!.ToDto(project.PriorityRankings.Where(r => r.IsActive)),
+                "Configurações de execução atualizadas com sucesso");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectExecutionSettingsDto>.Failure($"Erro ao atualizar configurações de execução: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectExecutionSettingsDto>> GetExecutionSettingsAsync(
+        Guid projectId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectExecutionSettingsDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+            if (project == null)
+                return Result<ProjectExecutionSettingsDto>.Failure($"Projeto não encontrado com ID {projectId}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectExecutionSettingsDto>.Failure("Sem permissão para visualizar configurações de projeto de outra empresa.");
+
+            if (project.ExecutionSettings == null)
+                return Result<ProjectExecutionSettingsDto>.Failure("Projeto não possui configurações de execução cadastradas.");
+
+            return Result<ProjectExecutionSettingsDto>.Success(
+                project.ExecutionSettings.ToDto(project.PriorityRankings.Where(r => r.IsActive)));
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectExecutionSettingsDto>.Failure($"Erro ao buscar configurações de execução: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<ProjectCompleteDto>> GetCompleteAsync(
+        Guid id,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProjectCompleteDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            var project = await _projectRepository.GetByIdAsync(id, cancellationToken);
+            if (project == null)
+                return Result<ProjectCompleteDto>.Failure($"Projeto não encontrado. Não foi encontrado projeto com ID {id}");
+
+            if (actorRole != UserRole.ADM_MASTER && actor?.CompanyId != project.CompanyId)
+                return Result<ProjectCompleteDto>.Failure("Sem permissão para acessar projeto de outra empresa.");
+
+            return Result<ProjectCompleteDto>.Success(project.ToCompleteDto());
+        }
+        catch (Exception ex)
+        {
+            return Result<ProjectCompleteDto>.Failure($"Erro ao buscar projeto completo: {ex.Message}");
         }
     }
 }

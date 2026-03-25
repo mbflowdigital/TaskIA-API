@@ -23,6 +23,7 @@ public class ProjectDto
     public DateTime? UpdatedAt { get; set; }
     public List<ProjectMemberDto> Members { get; set; } = new();
     public ProjectDetailsDto? Details { get; set; }
+    public ProjectExecutionSettingsDto? ExecutionSettings { get; set; }
 }
 
 /// <summary>
