@@ -278,7 +278,10 @@ public class AuthService : IAuthService
             }
 
             // 3. Extrair UserId das claims
-            var userIdClaim = principal.Claims.FirstOrDefault(c => c.Type == "userId")?.Value;
+            var userIdClaim = principal.Claims.FirstOrDefault(c =>
+                c.Type == System.Security.Claims.ClaimTypes.NameIdentifier ||
+                c.Type == "sub" ||
+                c.Type == "userId")?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
             {
                 return Result<LoginResponse>.Failure("Token inválido: UserId não encontrado");

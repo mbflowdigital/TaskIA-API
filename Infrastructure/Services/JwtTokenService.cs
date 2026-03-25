@@ -96,7 +96,7 @@ public class JwtTokenService : IJwtTokenService
 
             if (securityToken is not JwtSecurityToken jwtSecurityToken ||
                 !jwtSecurityToken.Header.Alg.Equals(
-                    SecurityAlgorithms.HmacSha256Signature,
+                    SecurityAlgorithms.HmacSha256,
                     StringComparison.InvariantCultureIgnoreCase))
             {
                 return null;

@@ -440,7 +440,7 @@ public class ClaudeService
 
             {
               "overview": "Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Seja objetivo e direto (3-4 frases).",
-              "risks": "Liste os principais riscos identificados separados por ponto e vírgula. Inclua riscos técnicos (arquitetura, integrações, tecnologia), riscos de equipe (disponibilidade, experiência, sobrecarga), riscos de negócio (dependências externas, compliance, orçamento), e riscos de cronograma (prazos apertados, períodos indisponíveis). Seja específico e cite exemplos do contexto fornecido.",
+              "risks": "Riscos no formato: CRITICO: <lista separada por vírgula> | ALTO: <lista separada por vírgula> | MEDIO: <lista separada por vírgula> | BAIXO: <lista separada por vírgula>. Classifique cada risco (técnico, de equipe, de negócio, de cronograma) no nível adequado. Use cada nível apenas se houver riscos reais nele; omita os que não se aplicam. Seja específico e cite exemplos do contexto fornecido.",
               "recommendations": "Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático."
             }
             """;
