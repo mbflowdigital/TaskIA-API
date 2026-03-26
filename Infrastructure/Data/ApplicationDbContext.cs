@@ -20,6 +20,15 @@ public class ApplicationDbContext : DbContext
     public DbSet<Company> Companies { get; set; } = null!;
     public DbSet<RoleEntity> Roles { get; set; } = null!;
     public DbSet<PositionsEntity> Positions { get; set; } = null!;
+    public DbSet<ProjectMemberEntity> ProjectMembers { get; set; } = null;
+    public DbSet<ProjectDetails> ProjectDetails { get; set; } = null!;
+    public DbSet<ProjectCompliance> ProjectCompliances { get; set; } = null!;
+    public DbSet<ProjectUnavailablePeriod> ProjectUnavailablePeriods { get; set; } = null!;
+    public DbSet<ProjectExecutionSettings> ProjectExecutionSettings { get; set; } = null!;
+    public DbSet<ProjectPriorityRanking> ProjectPriorityRankings { get; set; } = null!;
+    public DbSet<ProjectDependencies> ProjectDependencies { get; set; } = null!;
+    public DbSet<ProjectIntegrations> ProjectIntegrations { get; set; } = null!;
+    public DbSet<ProjectSensitiveData> ProjectSensitiveData { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,7 +99,7 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(u => u.Position)
                 .WithMany(p => p.Users)
                 .HasForeignKey(u => u.PositionId)
-                .OnDelete(DeleteBehavior.SetNull); // Permite null
+                .OnDelete(DeleteBehavior.SetNull); 
 
             // Define valor padrão para RoleId
             entity.Property(u => u.RoleId)
@@ -115,6 +124,25 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Restrict); // Não permite deletar usuário se tiver projetos
 
+        // Configurar relacionamento Project -> ProjectMembers (1:N)
+        modelBuilder.Entity<Project>()
+            .HasMany(p => p.ProjectMembers)
+            .WithOne(pm => pm.Project)
+            .HasForeignKey(pm => pm.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta membros ao deletar projeto
+
+        // Configurar relacionamento User -> ProjectMembers (1:N)
+        modelBuilder.Entity<User>()
+            .HasMany<ProjectMemberEntity>()
+            .WithOne(pm => pm.User)
+            .HasForeignKey(pm => pm.UserId)
+            .OnDelete(DeleteBehavior.Restrict); // Não permite deletar usuário se for membro de projeto
+
+        // Índice composto para garantir que um usuário não seja adicionado duas vezes ao mesmo projeto
+        modelBuilder.Entity<ProjectMemberEntity>()
+            .HasIndex(pm => new { pm.ProjectId, pm.UserId })
+            .IsUnique();
+
         // Índices para performance
         modelBuilder.Entity<Project>()
             .HasIndex(p => p.UserId);
@@ -122,7 +150,244 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Project>()
             .HasIndex(p => p.Status);
 
-        // Configurações adicionais se necessário
-        // Exemplo: modelBuilder.Entity<User>().HasIndex(e => e.Email).IsUnique();
+        // ========================================================================
+        // Configuração de ProjectDetails e relacionamentos
+        // ========================================================================
+
+        // Relacionamento Project -> ProjectDetails (1:1)
+        modelBuilder.Entity<Project>()
+            .HasOne(p => p.ProjectDetails)
+            .WithOne(pd => pd.Project)
+            .HasForeignKey<ProjectDetails>(pd => pd.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta detalhes ao deletar projeto
+
+        // Relacionamento ProjectDetails -> ProjectCompliance (1:N)
+        modelBuilder.Entity<ProjectDetails>()
+            .HasMany(pd => pd.Compliances)
+            .WithOne(pc => pc.ProjectDetails)
+            .HasForeignKey(pc => pc.ProjectDetailsId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta compliances ao deletar detalhes
+
+        // Relacionamento ProjectDetails -> ProjectUnavailablePeriod (1:N)
+        modelBuilder.Entity<ProjectDetails>()
+            .HasMany(pd => pd.UnavailablePeriods)
+            .WithOne(pu => pu.ProjectDetails)
+            .HasForeignKey(pu => pu.ProjectDetailsId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta períodos ao deletar detalhes
+
+        // Índice composto para garantir que um tipo de compliance não seja adicionado duas vezes ao mesmo projeto
+        modelBuilder.Entity<ProjectCompliance>()
+            .HasIndex(pc => new { pc.ProjectDetailsId, pc.TipoCompliance });
+
+        // Índices para ProjectDetails
+        modelBuilder.Entity<ProjectDetails>()
+            .HasIndex(pd => pd.ProjectId)
+            .IsUnique(); // Um projeto só pode ter um ProjectDetails
+
+        // Índices para ProjectUnavailablePeriod
+        modelBuilder.Entity<ProjectUnavailablePeriod>()
+            .HasIndex(pu => new { pu.ProjectDetailsId, pu.DataInicio, pu.DataFim });
+
+        // Configuração de enums como int no banco
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.Orcamento)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.HorarioTrabalho)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.DowntimePermitido)
+            .HasConversion<int>();
+
+        modelBuilder.Entity<ProjectCompliance>()
+            .Property(pc => pc.TipoCompliance)
+            .HasConversion<int>();
+
+        // Colunas condicionais de ProjectDetails
+        modelBuilder.Entity<ProjectDetails>()
+            .Property(pd => pd.ValorOrcamento)
+            .HasColumnType("decimal(18,2)");
+
+        // ========================================================================
+        // Configuração de ProjectExecutionSettings e ProjectPriorityRanking
+        // ========================================================================
+
+        // Relacionamento Project -> ProjectExecutionSettings (1:1)
+        modelBuilder.Entity<ProjectExecutionSettings>(entity =>
+        {
+            entity.ToTable("ProjectExecutionSettings");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.MaiorRisco)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.ExperienciaEquipe)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.NivelDetalhePlano)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.FrequenciaRevisao)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.Observacoes)
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.OQueDeuCerto)
+                .HasMaxLength(1000)
+                .HasColumnType("varchar(1000)");
+
+            entity.Property(e => e.OQueDeuErrado)
+                .HasMaxLength(1000)
+                .HasColumnType("varchar(1000)");
+
+            // Um projeto só pode ter um ProjectExecutionSettings
+            entity.HasIndex(e => e.ProjectId)
+                .IsUnique()
+                .HasDatabaseName("IX_ProjectExecutionSettings_ProjectId");
+
+            entity.HasOne(e => e.Project)
+                .WithOne(p => p.ExecutionSettings)
+                .HasForeignKey<ProjectExecutionSettings>(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Relacionamento Project -> ProjectPriorityRankings (1:N)
+        modelBuilder.Entity<ProjectPriorityRanking>(entity =>
+        {
+            entity.ToTable("ProjectPriorityRankings");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.PriorityType)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.Property(e => e.Posicao)
+                .IsRequired();
+
+            // Garante que um tipo de prioridade não seja duplicado por projeto
+            entity.HasIndex(e => new { e.ProjectId, e.PriorityType })
+                .IsUnique()
+                .HasDatabaseName("IX_ProjectPriorityRankings_ProjectId_PriorityType");
+
+            // Índice para performance de ordenação
+            entity.HasIndex(e => new { e.ProjectId, e.Posicao })
+                .HasDatabaseName("IX_ProjectPriorityRankings_ProjectId_Posicao");
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.PriorityRankings)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ========================================================================
+        // Configuração de ProjectDependencies, ProjectIntegrations e ProjectSensitiveData
+        // ========================================================================
+
+        // Relacionamento Project -> ProjectDependencies (1:N)
+        modelBuilder.Entity<ProjectDependencies>(entity =>
+        {
+            entity.ToTable("ProjectDependencies");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.Nome)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Descricao)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.Prazo)
+                .IsRequired();
+
+            entity.Property(e => e.Criticidade)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.HasIndex(e => e.ProjectId)
+                .HasDatabaseName("IX_ProjectDependencies_ProjectId");
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.Dependencies)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Relacionamento Project -> ProjectIntegrations (1:N)
+        modelBuilder.Entity<ProjectIntegrations>(entity =>
+        {
+            entity.ToTable("ProjectIntegrations");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.NomeSistema)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Tipo)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(e => e.Criticidade)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasConversion<int>();
+
+            entity.HasIndex(e => e.ProjectId)
+                .HasDatabaseName("IX_ProjectIntegrations_ProjectId");
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.Integrations)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Relacionamento Project -> ProjectSensitiveData (1:N)
+        modelBuilder.Entity<ProjectSensitiveData>(entity =>
+        {
+            entity.ToTable("ProjectSensitiveData");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.TipoDadoSensivel)
+                .IsRequired()
+                .HasConversion<int>();
+
+            // Garante que um tipo de dado sensível não seja duplicado por projeto
+            entity.HasIndex(e => new { e.ProjectId, e.TipoDadoSensivel })
+                .IsUnique()
+                .HasDatabaseName("IX_ProjectSensitiveData_ProjectId_TipoDadoSensivel");
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.SensitiveData)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
