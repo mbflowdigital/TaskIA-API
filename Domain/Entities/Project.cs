@@ -26,10 +26,16 @@ public class Project : BaseEntity
 
     public DateTime? EndDate { get; set; }
 
+    [MaxLength(200)]
+    public string? ResponsibleSector { get; set; }
+
+    [MaxLength(100)]
+    public string? ProjectType { get; set; }
+
     // Relacionamento com User
     [Required]
     public Guid UserId { get; set; }
-    
+
     [ForeignKey(nameof(UserId))]
     public virtual User? User { get; set; }
 
@@ -39,19 +45,42 @@ public class Project : BaseEntity
     [ForeignKey(nameof(CompanyId))]
     public virtual Company? Company { get; set; }
 
+    // Relacionamento com ProjectMembers (membros da equipe do projeto)
+    public virtual ICollection<ProjectMemberEntity> ProjectMembers { get; set; } = new List<ProjectMemberEntity>();
+
+    // Relacionamento com ProjectDetails (detalhes e configurações do projeto)
+    public virtual ProjectDetails? ProjectDetails { get; set; }
+
+    // Relacionamento com ProjectExecutionSettings (prioridades e expectativas do projeto)
+    public virtual ProjectExecutionSettings? ExecutionSettings { get; set; }
+
+    // Relacionamento com ProjectPriorityRankings (ranking de prioridades do projeto)
+    public virtual ICollection<ProjectPriorityRanking> PriorityRankings { get; set; } = new List<ProjectPriorityRanking>();
+
+    // Relacionamento com ProjectDependencies (dependências externas — ativo quando TemDependenciasExternas = true)
+    public virtual ICollection<ProjectDependencies> Dependencies { get; set; } = new List<ProjectDependencies>();
+
+    // Relacionamento com ProjectIntegrations (integrações — ativo quando TemIntegracoes = true)
+    public virtual ICollection<ProjectIntegrations> Integrations { get; set; } = new List<ProjectIntegrations>();
+
+    // Relacionamento com ProjectSensitiveData (dados sensíveis tratados pelo projeto)
+    public virtual ICollection<ProjectSensitiveData> SensitiveData { get; set; } = new List<ProjectSensitiveData>();
+
     // Construtor p�blico
     public Project() { }
 
     /// <summary>
     /// Atualiza informa��es b�sicas do projeto
     /// </summary>
-    public void UpdateInfo(string name, string? objective, string? description, DateTime? startDate, DateTime? endDate)
+    public void UpdateInfo(string name, string? objective, string? description, DateTime? startDate, DateTime? endDate, string? responsibleSector = null, string? projectType = null)
     {
         Name = name;
         Objective = objective;
         Description = description;
         StartDate = startDate;
         EndDate = endDate;
+        ResponsibleSector = responsibleSector;
+        ProjectType = projectType;
         SetUpdatedAt();
     }
 
@@ -102,5 +131,66 @@ public class Project : BaseEntity
     {
         Deactivate();
         SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Adiciona um membro ao projeto
+    /// </summary>
+    public void AddMember(ProjectMemberEntity member)
+    {
+        ProjectMembers.Add(member);
+        SetUpdatedAt();
+    }
+    
+    /// <summary>
+    /// Remove um membro do projeto
+    /// </summary>
+    public void RemoveMember(Guid memberId)
+    {
+        var member = ProjectMembers.FirstOrDefault(m => m.Id == memberId);
+        if (member != null)
+        {
+            member.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove uma dependência externa do projeto
+    /// </summary>
+    public void RemoveDependency(Guid dependencyId)
+    {
+        var dependency = Dependencies.FirstOrDefault(d => d.Id == dependencyId);
+        if (dependency != null)
+        {
+            dependency.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove uma integração do projeto
+    /// </summary>
+    public void RemoveIntegration(Guid integrationId)
+    {
+        var integration = Integrations.FirstOrDefault(i => i.Id == integrationId);
+        if (integration != null)
+        {
+            integration.Deactivate();
+            SetUpdatedAt();
+        }
+    }
+
+    /// <summary>
+    /// Remove um dado sensível do projeto
+    /// </summary>
+    public void RemoveSensitiveData(Guid sensitiveDataId)
+    {
+        var data = SensitiveData.FirstOrDefault(s => s.Id == sensitiveDataId);
+        if (data != null)
+        {
+            data.Deactivate();
+            SetUpdatedAt();
+        }
     }
 }

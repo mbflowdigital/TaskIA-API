@@ -55,15 +55,15 @@ public class ProjectsController : ControllerBase
     /// <summary>
     /// Busca projeto por ID
     /// </summary>
-    [HttpGet("{id:guid}")]
+    [HttpGet("{projectId:guid}")]
     [ProducesResponseType(typeof(Result<ProjectDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetById(
-        Guid id,
+        Guid projectId,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorRole) = GetActorContext();
-        var result = await _projectService.GetByIdAsync(id, actorUserId, actorRole, cancellationToken);
+        var result = await _projectService.GetByIdAsync(projectId, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -91,15 +91,15 @@ public class ProjectsController : ControllerBase
     /// <summary>
     /// Desativa um projeto (soft delete)
     /// </summary>
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{projectId:guid}")]
     [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(
-        Guid id,
+        Guid projectId,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorRole) = GetActorContext();
-        var result = await _projectService.DeleteAsync(id, actorUserId, actorRole, cancellationToken);
+        var result = await _projectService.DeleteAsync(projectId, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 
@@ -162,15 +162,245 @@ public class ProjectsController : ControllerBase
     /// <summary>
     /// Alterna status do projeto entre Active e Inactive automaticamente
     /// </summary>
-    [HttpPatch("{id:guid}/status")]
+    [HttpPatch("{projectId:guid}/status")]
     [ProducesResponseType(typeof(Result<ProjectDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ToggleStatus(
-        Guid id,
+        Guid projectId,
         CancellationToken cancellationToken)
     {
         var (actorUserId, actorRole) = GetActorContext();
-        var result = await _projectService.ToggleStatusAsync(id, actorUserId, actorRole, cancellationToken);
+        var result = await _projectService.ToggleStatusAsync(projectId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    
+
+    /// <summary>
+    /// Adiciona um membro ao projeto
+    /// </summary>
+    [HttpPost("{projectId:guid}/members")]
+    [ProducesResponseType(typeof(Result<ProjectMemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddMember(
+        Guid projectId,
+        [FromBody] CreateProjectMemberRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.AddMemberAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Remove um membro do projeto
+    /// </summary>
+    [HttpDelete("{projectId:guid}/members/{memberId:guid}")]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RemoveMember(
+        Guid projectId,
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.RemoveMemberAsync(projectId, memberId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Lista todos os membros ativos de um projeto
+    /// </summary>
+    [HttpGet("{projectId:guid}/members")]
+    [ProducesResponseType(typeof(Result<IEnumerable<ProjectMemberDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetProjectMembers(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetProjectMembersAsync(projectId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    
+
+    /// <summary>
+    /// Cria detalhes e configurações do projeto
+    /// </summary>
+    [HttpPost("{projectId:guid}/details")]
+    [ProducesResponseType(typeof(Result<ProjectDetailsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateProjectDetails(
+        Guid projectId,
+        [FromBody] CreateProjectDetailsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.CreateProjectDetailsAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Atualiza detalhes e configurações do projeto
+    /// </summary>
+    [HttpPut("{projectId:guid}/details")]
+    [ProducesResponseType(typeof(Result<ProjectDetailsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateProjectDetails(
+        Guid projectId,
+        [FromBody] UpdateProjectDetailsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.UpdateProjectDetailsAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Obtém detalhes e configurações do projeto
+    /// </summary>
+    [HttpGet("{projectId:guid}/details")]
+    [ProducesResponseType(typeof(Result<ProjectDetailsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetProjectDetails(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetProjectDetailsAsync(projectId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+  
+
+    /// <summary>
+    /// Adiciona um compliance ao projeto
+    /// </summary>
+    [HttpPost("{projectId:guid}/details/compliances")]
+    [ProducesResponseType(typeof(Result<ProjectComplianceDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddCompliance(
+        Guid projectId,
+        [FromBody] CreateProjectComplianceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.AddComplianceAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Remove um compliance do projeto
+    /// </summary>
+    [HttpDelete("{projectId:guid}/details/compliances/{complianceId:guid}")]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RemoveCompliance(
+        Guid projectId,
+        Guid complianceId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.RemoveComplianceAsync(projectId, complianceId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+ 
+
+    /// <summary>
+    /// Adiciona um período indisponível ao projeto
+    /// </summary>
+    [HttpPost("{projectId:guid}/details/unavailable-periods")]
+    [ProducesResponseType(typeof(Result<ProjectUnavailablePeriodDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddUnavailablePeriod(
+        Guid projectId,
+        [FromBody] CreateProjectUnavailablePeriodRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.AddUnavailablePeriodAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Remove um período indisponível do projeto
+    /// </summary>
+    [HttpDelete("{projectId:guid}/details/unavailable-periods/{periodId:guid}")]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RemoveUnavailablePeriod(
+        Guid projectId,
+        Guid periodId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.RemoveUnavailablePeriodAsync(projectId, periodId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+
+
+    /// <summary>
+    /// Cria as configurações de execução do projeto (experiência, nível de detalhe, prioridades, etc.)
+    /// </summary>
+    [HttpPost("{projectId:guid}/execution-settings")]
+    [ProducesResponseType(typeof(Result<ProjectExecutionSettingsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateExecutionSettings(
+        Guid projectId,
+        [FromBody] CreateProjectExecutionSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.CreateExecutionSettingsAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Atualiza as configurações de execução do projeto
+    /// </summary>
+    [HttpPut("{projectId:guid}/execution-settings")]
+    [ProducesResponseType(typeof(Result<ProjectExecutionSettingsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateExecutionSettings(
+        Guid projectId,
+        [FromBody] UpdateProjectExecutionSettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.UpdateExecutionSettingsAsync(projectId, request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Retorna as configurações de execução do projeto com prioridades ordenadas e nomes reais dos enums
+    /// </summary>
+    [HttpGet("{projectId:guid}/execution-settings")]
+    [ProducesResponseType(typeof(Result<ProjectExecutionSettingsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetExecutionSettings(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetExecutionSettingsAsync(projectId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Retorna a visão completa do projeto com todas as seções ativas e todos os campos enum como texto
+    /// </summary>
+    [HttpGet("{projectId:guid}/complete")]
+    [ProducesResponseType(typeof(Result<ProjectCompleteDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetComplete(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+        var result = await _projectService.GetCompleteAsync(projectId, actorUserId, actorRole, cancellationToken);
         return result.IsSuccess ? Ok(result) : BadRequest(result);
     }
 

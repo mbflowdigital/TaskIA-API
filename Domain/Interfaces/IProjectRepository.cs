@@ -8,38 +8,26 @@ namespace Domain.Interfaces;
 /// </summary>
 public interface IProjectRepository : IRepository<Project>
 {
-    /// <summary>
-    /// Busca projetos por nome (busca parcial)
-    /// </summary>
     Task<IEnumerable<Project>> FindByNameAsync(string name, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Busca projetos por status
-    /// </summary>
     Task<IEnumerable<Project>> FindByStatusAsync(string status, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Verifica se j� existe projeto com o mesmo nome (para o mesmo usu�rio no futuro)
-    /// </summary>
     Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Busca projetos ativos
-    /// </summary>
     Task<IEnumerable<Project>> GetActiveProjectsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Busca projetos de um usu�rio espec�fico
-    /// </summary>
     Task<IEnumerable<Project>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Busca projetos ativos de uma empresa específica
-    /// </summary>
     Task<IEnumerable<Project>> GetActiveProjectsByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Verifica se usu�rio existe (FK constraint)
-    /// </summary>
     Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    // Métodos diretos para ProjectDetails (evita conflito de estado do EF Core)
+    Task AddProjectDetailsAsync(ProjectDetails details, CancellationToken cancellationToken = default);
+    Task AddComplianceAsync(ProjectCompliance compliance, CancellationToken cancellationToken = default);
+    Task AddUnavailablePeriodAsync(ProjectUnavailablePeriod period, CancellationToken cancellationToken = default);
+    Task<ProjectDetails?> GetProjectDetailsByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    // Métodos para entidades de contexto do projeto
+    Task AddDependencyAsync(ProjectDependencies dependency, CancellationToken cancellationToken = default);
+    Task AddIntegrationAsync(ProjectIntegrations integration, CancellationToken cancellationToken = default);
+    Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default);
+
+    // Métodos para ExecutionSettings e PriorityRankings
+    Task AddExecutionSettingsAsync(ProjectExecutionSettings settings, CancellationToken cancellationToken = default);
+    Task AddPriorityRankingAsync(ProjectPriorityRanking ranking, CancellationToken cancellationToken = default);
 }

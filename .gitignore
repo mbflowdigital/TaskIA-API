@@ -64,7 +64,6 @@ artifacts/
 
 # Sensitive appsettings — never commit secrets
 appsettings.Production.json
-appsettings.Development.json
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

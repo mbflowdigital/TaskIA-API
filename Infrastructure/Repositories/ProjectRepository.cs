@@ -102,13 +102,72 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
     }
 
     /// <summary>
-    /// Override GetByIdAsync para incluir dados do usu�rio
+    /// Override GetByIdAsync para incluir dados do usu�rio e relacionamentos
     /// </summary>
     public override async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _dbSet
             .Include(p => p.User)
             .Include(p => p.Company)
+            .Include(p => p.ProjectMembers.Where(m => m.IsActive))
+                .ThenInclude(m => m.User)
+            .Include(p => p.ProjectDetails)
+                .ThenInclude(pd => pd!.Compliances.Where(c => c.IsActive))
+            .Include(p => p.ProjectDetails)
+                .ThenInclude(pd => pd!.UnavailablePeriods.Where(up => up.IsActive))
+            .Include(p => p.Dependencies.Where(d => d.IsActive))
+            .Include(p => p.Integrations.Where(i => i.IsActive))
+            .Include(p => p.SensitiveData.Where(s => s.IsActive))
+            .Include(p => p.ExecutionSettings)
+            .Include(p => p.PriorityRankings.Where(r => r.IsActive))
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+    }
+
+    public async Task AddProjectDetailsAsync(ProjectDetails details, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectDetails.AddAsync(details, cancellationToken);
+    }
+
+    public async Task AddComplianceAsync(ProjectCompliance compliance, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectCompliances.AddAsync(compliance, cancellationToken);
+    }
+
+    public async Task AddUnavailablePeriodAsync(ProjectUnavailablePeriod period, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectUnavailablePeriods.AddAsync(period, cancellationToken);
+    }
+
+    public async Task<ProjectDetails?> GetProjectDetailsByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ProjectDetails
+            .Include(pd => pd.Compliances.Where(c => c.IsActive))
+            .Include(pd => pd.UnavailablePeriods.Where(up => up.IsActive))
+            .FirstOrDefaultAsync(pd => pd.ProjectId == projectId, cancellationToken);
+    }
+
+    public async Task AddDependencyAsync(ProjectDependencies dependency, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectDependencies.AddAsync(dependency, cancellationToken);
+    }
+
+    public async Task AddIntegrationAsync(ProjectIntegrations integration, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectIntegrations.AddAsync(integration, cancellationToken);
+    }
+
+    public async Task AddSensitiveDataAsync(ProjectSensitiveData sensitiveData, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectSensitiveData.AddAsync(sensitiveData, cancellationToken);
+    }
+
+    public async Task AddExecutionSettingsAsync(ProjectExecutionSettings settings, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectExecutionSettings.AddAsync(settings, cancellationToken);
+    }
+
+    public async Task AddPriorityRankingAsync(ProjectPriorityRanking ranking, CancellationToken cancellationToken = default)
+    {
+        await _context.ProjectPriorityRankings.AddAsync(ranking, cancellationToken);
     }
 }

@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260324145132_CreateProjectPrioritiesAndExecutionsSettings")]
+    partial class CreateProjectPrioritiesAndExecutionsSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -235,49 +238,6 @@ namespace Infrastructure.Data.Migrations
                     b.ToTable("ProjectCompliances");
                 });
 
-            modelBuilder.Entity("Domain.Entities.ProjectDependencies", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Criticidade")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Descricao")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTime>("Prazo")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId")
-                        .HasDatabaseName("IX_ProjectDependencies_ProjectId");
-
-                    b.ToTable("ProjectDependencies", (string)null);
-                });
-
             modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
                 {
                     b.Property<Guid>("Id")
@@ -291,9 +251,6 @@ namespace Infrastructure.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("HorarioTrabalho")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("HorasDowntime")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsActive")
@@ -313,9 +270,6 @@ namespace Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<decimal?>("ValorOrcamento")
-                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -350,14 +304,6 @@ namespace Infrastructure.Data.Migrations
                     b.Property<int>("NivelDetalhePlano")
                         .HasColumnType("int");
 
-                    b.Property<string>("OQueDeuCerto")
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
-
-                    b.Property<string>("OQueDeuErrado")
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
-
                     b.Property<string>("Observacoes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -375,50 +321,6 @@ namespace Infrastructure.Data.Migrations
                         .HasDatabaseName("IX_ProjectExecutionSettings_ProjectId");
 
                     b.ToTable("ProjectExecutionSettings", (string)null);
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectIntegrations", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Criticidade")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("NomeSistema")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Tipo")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId")
-                        .HasDatabaseName("IX_ProjectIntegrations_ProjectId");
-
-                    b.ToTable("ProjectIntegrations", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Entities.ProjectMemberEntity", b =>
@@ -502,36 +404,6 @@ namespace Infrastructure.Data.Migrations
                         .HasDatabaseName("IX_ProjectPriorityRankings_ProjectId_PriorityType");
 
                     b.ToTable("ProjectPriorityRankings", (string)null);
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectSensitiveData", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("TipoDadoSensivel")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "TipoDadoSensivel")
-                        .IsUnique()
-                        .HasDatabaseName("IX_ProjectSensitiveData_ProjectId_TipoDadoSensivel");
-
-                    b.ToTable("ProjectSensitiveData", (string)null);
                 });
 
             modelBuilder.Entity("Domain.Entities.ProjectUnavailablePeriod", b =>
@@ -708,17 +580,6 @@ namespace Infrastructure.Data.Migrations
                     b.Navigation("ProjectDetails");
                 });
 
-            modelBuilder.Entity("Domain.Entities.ProjectDependencies", b =>
-                {
-                    b.HasOne("Domain.Entities.Project", "Project")
-                        .WithMany("Dependencies")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
                 {
                     b.HasOne("Domain.Entities.Project", "Project")
@@ -735,17 +596,6 @@ namespace Infrastructure.Data.Migrations
                     b.HasOne("Domain.Entities.Project", "Project")
                         .WithOne("ExecutionSettings")
                         .HasForeignKey("Domain.Entities.ProjectExecutionSettings", "ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectIntegrations", b =>
-                {
-                    b.HasOne("Domain.Entities.Project", "Project")
-                        .WithMany("Integrations")
-                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -775,17 +625,6 @@ namespace Infrastructure.Data.Migrations
                 {
                     b.HasOne("Domain.Entities.Project", "Project")
                         .WithMany("PriorityRankings")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Domain.Entities.ProjectSensitiveData", b =>
-                {
-                    b.HasOne("Domain.Entities.Project", "Project")
-                        .WithMany("SensitiveData")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -844,19 +683,13 @@ namespace Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Domain.Entities.Project", b =>
                 {
-                    b.Navigation("Dependencies");
-
                     b.Navigation("ExecutionSettings");
-
-                    b.Navigation("Integrations");
 
                     b.Navigation("PriorityRankings");
 
                     b.Navigation("ProjectDetails");
 
                     b.Navigation("ProjectMembers");
-
-                    b.Navigation("SensitiveData");
                 });
 
             modelBuilder.Entity("Domain.Entities.ProjectDetails", b =>
