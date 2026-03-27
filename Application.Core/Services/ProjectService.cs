@@ -1,4 +1,6 @@
-using Application.Core.DTOs.Projects;
+using Application.Core.DTOs.Projects.Extensions;
+using Application.Core.DTOs.Projects.Requests;
+using Application.Core.DTOs.Projects.Responses;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Entities;

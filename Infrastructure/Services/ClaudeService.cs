@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Domain.Common;
+using Domain.Interfaces;
+using Infrastructure.Data;
 using Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 
@@ -15,6 +17,7 @@ public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? 
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
 public record UnavailablePeriodInput(string StartDate, string EndDate, string? Reason);
 public record ProjectAnalysisInput(
+    Guid ProjectId,
     string ProjectName,
     string Objective,
     string StartDate,
@@ -53,14 +56,20 @@ public class ClaudeService
     private readonly string _apiKey;
     private readonly string _model;
     private readonly string _baseUrl;
+    private readonly IParameterRepository _parameterRepository;
+    private readonly IProjectRepository _projectRepository;
+    private readonly ApplicationDbContext _context;
 
-    public ClaudeService(HttpClient httpClient, IConfiguration configuration)
+    public ClaudeService(HttpClient httpClient, IConfiguration configuration, IParameterRepository parameterRepository, IProjectRepository projectRepository, ApplicationDbContext context)
     {
         _httpClient = httpClient;
         var rawKey = configuration["Claude:ApiKey"] ?? throw new InvalidOperationException("Claude:ApiKey não configurado.");
         _apiKey = AesProtector.Decrypt(rawKey);
         _model = configuration["Claude:Model"] ?? "claude-sonnet-4-5";
         _baseUrl = configuration["Claude:BaseUrl"] ?? "https://api.anthropic.com/v1";
+        _parameterRepository = parameterRepository;
+        _projectRepository = projectRepository;
+        _context = context;
     }
 
     public async Task<Result<ProjectSuggestion>> SuggestProjectAsync(string projectName, CancellationToken cancellationToken = default)
@@ -200,7 +209,11 @@ public class ClaudeService
         if (string.IsNullOrWhiteSpace(data?.ProjectName))
             return Result<ProjectAnalysis>.Failure("O nome do projeto é obrigatório.");
 
-        var prompt = BuildAnalysisPrompt(data);
+        var promptBaseParam = await _parameterRepository.GetByNomeAsync("Prompt_Base", cancellationToken);
+        if (promptBaseParam == null)
+            return Result<ProjectAnalysis>.Failure("Prompt_Base não encontrado na tabela de parâmetros.");
+
+        var prompt = BuildAnalysisPrompt(promptBaseParam.Valor, data);
 
         var requestBody = new
         {
@@ -245,6 +258,21 @@ public class ClaudeService
 
             var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
             var analysis = ParseAnalysis(text, prompt);
+
+            var projects = await _projectRepository.FindByNameAsync(data.ProjectName, cancellationToken);
+            var project = projects.FirstOrDefault();
+
+            if (project != null)
+            {
+                project.UpdatePromptEnviado(prompt);
+                await _projectRepository.UpdateAsync(project, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG] ATENÇÃO: Projeto '{data.ProjectName}' NÃO foi encontrado!");
+            }
+
             return Result<ProjectAnalysis>.Success(analysis, "Análise gerada com sucesso.");
         }
         catch
@@ -253,10 +281,11 @@ public class ClaudeService
         }
     }
 
-    private static string BuildAnalysisPrompt(ProjectAnalysisInput data)
+    private static string BuildAnalysisPrompt(string template, ProjectAnalysisInput data)
     {
         var endDateText = string.IsNullOrWhiteSpace(data.EndDate) ? "Não definida" : data.EndDate;
         var descriptionText = string.IsNullOrWhiteSpace(data.Description) ? "Não informada" : data.Description;
+
         var membersText = data.TeamMembers.Count == 0
             ? "Nenhum membro selecionado."
             : string.Join("\n", data.TeamMembers.Select(m =>
@@ -332,118 +361,36 @@ public class ClaudeService
         };
 
         var biggestRiskText = string.IsNullOrWhiteSpace(data.BiggestRisk) ? "Não informado" : data.BiggestRisk;
+        var whatWentWellText = string.IsNullOrWhiteSpace(data.WhatWentWell) ? "N/A" : data.WhatWentWell;
+        var whatWentWrongText = string.IsNullOrWhiteSpace(data.WhatWentWrong) ? "N/A" : data.WhatWentWrong;
         var observationsText = string.IsNullOrWhiteSpace(data.FinalObservations) ? "Nenhuma" : data.FinalObservations;
 
-        return $$"""
-            Você é um consultor sênior especialista em gerenciamento de projetos, análise de riscos e planejamento estratégico. 
-            Sua missão é analisar profundamente o projeto descrito abaixo e fornecer insights valiosos, identificando:
-            - Viabilidade real considerando recursos, prazos e complexidade
-            - Riscos técnicos, humanos, de negócio e externos
-            - Recomendações práticas e acionáveis para maximizar o sucesso do projeto
-
-            Considere o perfil da equipe, suas experiências passadas, restrições operacionais e o contexto completo do projeto.
-            Seja específico, objetivo e estratégico nas suas análises.
-
-            ═══════════════════════════════════════════════════════════════════
-            📋 INFORMAÇÕES GERAIS DO PROJETO
-            ═══════════════════════════════════════════════════════════════════
-
-            Nome do Projeto: {{data.ProjectName}}
-            Objetivo: {{data.Objective}}
-            Descrição Detalhada: {{descriptionText}}
-
-            📅 Cronograma:
-              • Data de Início: {{data.StartDate}}
-              • Data de Término: {{endDateText}}
-
-            🏢 Contexto Organizacional:
-              • Empresa: {{data.Company}}
-              • Departamento: {{data.Department}}
-              • Tipo de Projeto: {{data.ProjectType}}
-
-            ═══════════════════════════════════════════════════════════════════
-            👥 COMPOSIÇÃO DA EQUIPE E RESPONSABILIDADES
-            ═══════════════════════════════════════════════════════════════════
-
-            {{membersText}}
-
-            💡 ANÁLISE REQUERIDA: Avalie se a equipe possui:
-              - Seniority adequada para o escopo
-              - Dedicação suficiente considerando o prazo
-              - Papéis bem distribuídos (evitando sobrecarga)
-              - Aprovadores estrategicamente posicionados
-
-            ═══════════════════════════════════════════════════════════════════
-            ⚙️ CONTEXTO OPERACIONAL E RESTRIÇÕES
-            ═══════════════════════════════════════════════════════════════════
-
-            💰 Orçamento:
-              {{budgetText}}
-
-            ⏰ Regime de Trabalho:
-              {{workText}}
-
-            🚨 Política de Downtime:
-              {{downtimeText}}
-
-            🔗 Dependências Externas:
-            {{depsText}}
-
-            🔌 Integrações Necessárias:
-            {{intgText}}
-
-            📜 Conformidade e Regulamentações:
-              • Requisitos: {{complianceText}}
-              • Aprovadores de Compliance: {{approversText}}
-
-            🚫 Períodos de Indisponibilidade da Equipe:
-            {{periodsText}}
-
-            💡 ANÁLISE REQUERIDA: Identifique:
-              - Dependências críticas que podem bloquear o projeto
-              - Conflitos entre prazos de dependências e cronograma
-              - Riscos de disponibilidade da equipe em fases críticas
-              - Impacto das políticas de downtime na estratégia de deploy
-
-            ═══════════════════════════════════════════════════════════════════
-            🎯 PRIORIDADES E CONTEXTO ESTRATÉGICO
-            ═══════════════════════════════════════════════════════════════════
-
-            Ranking de Prioridades: {{prioritiesText}}
-
-            ⚠️ Maior Risco Percebido pela Equipe:
-            {{biggestRiskText}}
-
-            📚 Experiência Prévia da Equipe:
-              • Nível de experiência: {{experienceText}}
-              • O que funcionou bem em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWell) ? "N/A" : data.WhatWentWell)}}
-              • O que não funcionou em projetos anteriores: {{(string.IsNullOrWhiteSpace(data.WhatWentWrong) ? "N/A" : data.WhatWentWrong)}}
-
-            📊 Expectativas de Gestão:
-              • Nível de Detalhe no Planejamento: {{detailText}}
-              • Frequência de Revisão: {{reviewText}}
-
-            📝 Observações Finais do Solicitante:
-            {{observationsText}}
-
-            💡 ANÁLISE REQUERIDA:
-              - Compare as prioridades declaradas com os riscos identificados
-              - Identifique se a experiência prévia da equipe é compatível com os desafios
-              - Sugira ajustes no nível de detalhe ou frequência de revisão se necessário
-              - Considere as lições aprendidas para evitar erros recorrentes
-
-            ═══════════════════════════════════════════════════════════════════
-            📤 FORMATO DE RESPOSTA OBRIGATÓRIO
-            ═══════════════════════════════════════════════════════════════════
-
-            Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicionais):
-
-            {
-              "overview": "Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Seja objetivo e direto (3-4 frases).",
-              "risks": "Riscos no formato: CRITICO: <lista separada por vírgula> | ALTO: <lista separada por vírgula> | MEDIO: <lista separada por vírgula> | BAIXO: <lista separada por vírgula>. Classifique cada risco (técnico, de equipe, de negócio, de cronograma) no nível adequado. Use cada nível apenas se houver riscos reais nele; omita os que não se aplicam. Seja específico e cite exemplos do contexto fornecido.",
-              "recommendations": "Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático."
-            }
-            """;
+        return template
+            .Replace("{ProjectName}", data.ProjectName)
+            .Replace("{Objective}", data.Objective)
+            .Replace("{Description}", descriptionText)
+            .Replace("{StartDate}", data.StartDate)
+            .Replace("{EndDate}", endDateText)
+            .Replace("{Company}", data.Company)
+            .Replace("{Department}", data.Department)
+            .Replace("{ProjectType}", data.ProjectType)
+            .Replace("{TeamMembers}", membersText)
+            .Replace("{Budget}", budgetText)
+            .Replace("{WorkSchedule}", workText)
+            .Replace("{DowntimePolicy}", downtimeText)
+            .Replace("{ExternalDependencies}", depsText)
+            .Replace("{Integrations}", intgText)
+            .Replace("{Compliance}", complianceText)
+            .Replace("{ComplianceApprovers}", approversText)
+            .Replace("{UnavailablePeriods}", periodsText)
+            .Replace("{PriorityRanking}", prioritiesText)
+            .Replace("{BiggestRisk}", biggestRiskText)
+            .Replace("{PreviousExperience}", experienceText)
+            .Replace("{WhatWentWell}", whatWentWellText)
+            .Replace("{WhatWentWrong}", whatWentWrongText)
+            .Replace("{DetailLevel}", detailText)
+            .Replace("{ReviewFrequency}", reviewText)
+            .Replace("{FinalObservations}", observationsText);
     }
 
     private static ProjectAnalysis ParseAnalysis(string text, string promptSent)
