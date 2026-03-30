@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Folder Include="Data\Configurations\" />
+    <Folder Include="Data\Scripts\" />
   </ItemGroup>
 
 </Project>

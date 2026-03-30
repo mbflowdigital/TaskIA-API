@@ -1,4 +1,4 @@
-using Application.Core.DTOs.Projects;
+using Application.Core.DTOs.Projects.Requests;
 using FluentValidation;
 
 namespace Application.Core.Validators.Projects;

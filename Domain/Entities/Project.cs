@@ -32,6 +32,8 @@ public class Project : BaseEntity
     [MaxLength(100)]
     public string? ProjectType { get; set; }
 
+    public string? Prompt_enviado { get; set; }
+
     // Relacionamento com User
     [Required]
     public Guid UserId { get; set; }
@@ -192,5 +194,14 @@ public class Project : BaseEntity
             data.Deactivate();
             SetUpdatedAt();
         }
+    }
+
+    /// <summary>
+    /// Atualiza o prompt enviado para a IA
+    /// </summary>
+    public void UpdatePromptEnviado(string prompt)
+    {
+        Prompt_enviado = prompt;
+        SetUpdatedAt();
     }
 }
