@@ -1,7 +1,7 @@
+using Application.Core.DTOs.Projects.Responses;
 using Domain.Entities;
-using Domain.Enums;
 
-namespace Application.Core.DTOs.Projects;
+namespace Application.Core.DTOs.Projects.Extensions;
 
 /// <summary>
 /// Métodos de extensão para mapeamento de ProjectDetails e entidades relacionadas
