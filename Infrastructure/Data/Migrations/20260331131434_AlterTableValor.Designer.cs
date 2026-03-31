@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260331131434_AlterTableValor")]
+    partial class AlterTableValor
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -70,8 +73,9 @@ namespace Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasDefaultValue("A Fazer");
 
-                    b.Property<Guid?>("SugestaoResponsavelId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("SugestaoResponsavel")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -89,9 +93,6 @@ namespace Infrastructure.Data.Migrations
 
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_BoardTask_Status");
-
-                    b.HasIndex("SugestaoResponsavelId")
-                        .HasDatabaseName("IX_BoardTask_SugestaoResponsavelId");
 
                     b.HasIndex("ProjectId", "OrdemNoBoard")
                         .HasDatabaseName("IX_BoardTask_ProjectId_OrdemNoBoard");
@@ -792,18 +793,11 @@ namespace Infrastructure.Data.Migrations
                     b.HasOne("Domain.Entities.User", "Responsavel")
                         .WithMany()
                         .HasForeignKey("ResponsavelId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Entities.User", "SugestaoResponsavel")
-                        .WithMany()
-                        .HasForeignKey("SugestaoResponsavelId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Project");
 
                     b.Navigation("Responsavel");
-
-                    b.Navigation("SugestaoResponsavel");
                 });
 
             modelBuilder.Entity("Domain.Entities.Project", b =>

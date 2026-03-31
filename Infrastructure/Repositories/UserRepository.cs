@@ -95,6 +95,18 @@ public class UserRepository : Repository<User>, IUserRepository
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Busca usuário por nome (busca parcial, case-insensitive)
+    /// </summary>
+    public async Task<User?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        var normalizedName = name.Trim().ToLower();
+
+        return await _dbSet
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Name.ToLower().Contains(normalizedName) && u.IsActive, cancellationToken);
+    }
+
     // TODO: Exemplo de método específico que pode ser adicionado
     // public async Task<IEnumerable<User>> GetVerifiedUsersAsync(CancellationToken cancellationToken = default)
     // {

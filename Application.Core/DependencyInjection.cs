@@ -22,7 +22,8 @@ public static class DependencyInjection
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICompanyService, CompanyService>();
-        
+        services.AddScoped<IBoardService, BoardService>();
+
         // Adicione outros services aqui seguindo o mesmo padrão
         // services.AddScoped<IProductService, ProductService>();
         // services.AddScoped<IOrderService, OrderService>();

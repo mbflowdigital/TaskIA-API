@@ -58,6 +58,8 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
         services.AddScoped<IParameterRepository, ParameterRepository>();
+        services.AddScoped<IBoardRepository, BoardRepository>();
+        services.AddScoped<IBoardDependencyRepository, BoardDependencyRepository>();
         // TODO: Adicionar outros repositórios específicos aqui
         // services.AddScoped<IProductRepository, ProductRepository>();
 

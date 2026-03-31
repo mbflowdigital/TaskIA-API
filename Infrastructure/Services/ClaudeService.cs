@@ -11,7 +11,8 @@ using Microsoft.Extensions.Configuration;
 namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
-public record ProjectAnalysis(string Overview, string Risks, string Recommendations, string PromptSent);
+public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, string? Order);
+public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion> Tasks, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
@@ -58,9 +59,16 @@ public class ClaudeService
     private readonly string _baseUrl;
     private readonly IParameterRepository _parameterRepository;
     private readonly IProjectRepository _projectRepository;
+    private readonly IBoardRepository _boardRepository;
     private readonly ApplicationDbContext _context;
 
-    public ClaudeService(HttpClient httpClient, IConfiguration configuration, IParameterRepository parameterRepository, IProjectRepository projectRepository, ApplicationDbContext context)
+    public ClaudeService(
+        HttpClient httpClient, 
+        IConfiguration configuration, 
+        IParameterRepository parameterRepository, 
+        IProjectRepository projectRepository, 
+        IBoardRepository boardRepository,
+        ApplicationDbContext context)
     {
         _httpClient = httpClient;
         var rawKey = configuration["Claude:ApiKey"] ?? throw new InvalidOperationException("Claude:ApiKey não configurado.");
@@ -69,6 +77,7 @@ public class ClaudeService
         _baseUrl = configuration["Claude:BaseUrl"] ?? "https://api.anthropic.com/v1";
         _parameterRepository = parameterRepository;
         _projectRepository = projectRepository;
+        _boardRepository = boardRepository;
         _context = context;
     }
 
@@ -202,6 +211,30 @@ public class ClaudeService
 
         [JsonPropertyName("recommendations")]
         public string? Recommendations { get; set; }
+
+        [JsonPropertyName("tasks")]
+        public List<ClaudeTaskJson>? Tasks { get; set; }
+    }
+
+    private sealed class ClaudeTaskJson
+    {
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("priority")]
+        public string? Priority { get; set; }
+
+        [JsonPropertyName("suggestedResponsible")]
+        public string? SuggestedResponsible { get; set; }
+
+        [JsonPropertyName("deadlineInDays")]
+        public int DeadlineInDays { get; set; }
+
+        [JsonPropertyName("order")]
+        public string? Order { get; set; }
     }
 
     public async Task<Result<ProjectAnalysis>> AnalyzeProjectAsync(ProjectAnalysisInput data, CancellationToken cancellationToken = default)
@@ -218,7 +251,7 @@ public class ClaudeService
         var requestBody = new
         {
             model = _model,
-            max_tokens = 2048,
+            max_tokens = 8192,
             messages = new[]
             {
                 new { role = "user", content = prompt }
@@ -251,12 +284,22 @@ public class ClaudeService
 
         try
         {
+            Console.WriteLine("[DEBUG] Resposta bruta do Claude:");
+            Console.WriteLine($"[DEBUG] Tamanho da resposta: {responseContent.Length} caracteres");
+            Console.WriteLine(responseContent.Length > 1000 ? responseContent.Substring(0, 1000) + "..." : responseContent);
+            Console.WriteLine("[DEBUG] ==================");
+
             var claudeResponse = JsonSerializer.Deserialize<ClaudeApiResponse>(responseContent, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
 
             var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+
+            Console.WriteLine("[DEBUG] Texto extraído do Claude:");
+            Console.WriteLine($"[DEBUG] Tamanho do texto: {text.Length} caracteres");
+            Console.WriteLine(text.Length > 1000 ? text.Substring(0, 1000) + "..." : text);
+            Console.WriteLine("[DEBUG] ==================");
             var analysis = ParseAnalysis(text, prompt);
 
             var projects = await _projectRepository.FindByNameAsync(data.ProjectName, cancellationToken);
@@ -266,6 +309,52 @@ public class ClaudeService
             {
                 project.UpdatePromptEnviado(prompt);
                 await _projectRepository.UpdateAsync(project, cancellationToken);
+
+                // Criar as tarefas no Board baseado nas sugestões da IA
+                if (analysis.Tasks != null && analysis.Tasks.Count > 0)
+                {
+                    var boards = new List<Domain.Entities.Board>();
+
+                    foreach (var task in analysis.Tasks)
+                    {
+                        // Buscar usuário sugerido pelo nome na lista de membros da equipe
+                        Guid? sugestaoResponsavelId = null;
+                        if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
+                        {
+                            var teamMember = data.TeamMembers?.FirstOrDefault(m => 
+                                m.UserName.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
+
+                            if (teamMember != null && Guid.TryParse(teamMember.UserId, out var userId))
+                            {
+                                sugestaoResponsavelId = userId;
+                                Console.WriteLine($"[DEBUG] Usuário sugerido '{task.SuggestedResponsible}' encontrado: {userId}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[WARNING] Usuário sugerido '{task.SuggestedResponsible}' não encontrado nos membros da equipe para a tarefa '{task.Name}'");
+                            }
+                        }
+
+                        var board = new Domain.Entities.Board(
+                            projectId: project.Id,
+                            name: task.Name,
+                            description: task.Description,
+                            status: "A Fazer",
+                            priority: task.Priority,
+                            sugestaoResponsavelId: sugestaoResponsavelId,
+                            prazoEmDias: task.DeadlineInDays,
+                            ordemNoBoard: task.Order
+                        );
+
+                        // Atribuir o criador do projeto como responsável inicial da tarefa
+                        board.AssignResponsavel(project.UserId);
+                        boards.Add(board);
+                    }
+
+                    await _boardRepository.AddRangeAsync(boards, cancellationToken);
+                    Console.WriteLine($"[DEBUG] {boards.Count} tarefas criadas no Board para o projeto {project.Name} (Responsável: {project.UserId})");
+                }
+
                 await _context.SaveChangesAsync(cancellationToken);
             }
             else
@@ -273,11 +362,17 @@ public class ClaudeService
                 Console.WriteLine($"[DEBUG] ATENÇÃO: Projeto '{data.ProjectName}' NÃO foi encontrado!");
             }
 
-            return Result<ProjectAnalysis>.Success(analysis, "Análise gerada com sucesso.");
+            return Result<ProjectAnalysis>.Success(analysis, $"Análise gerada com sucesso. {analysis.Tasks?.Count ?? 0} tarefas criadas.");
         }
-        catch
+        catch (Exception ex)
         {
-            return Result<ProjectAnalysis>.Failure("Não foi possível processar a resposta do Claude.");
+            Console.WriteLine($"[ERROR] Erro ao processar resposta do Claude: {ex.Message}");
+            Console.WriteLine($"[ERROR] StackTrace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[ERROR] InnerException: {ex.InnerException.Message}");
+            }
+            return Result<ProjectAnalysis>.Failure($"Não foi possível processar a resposta do Claude: {ex.Message}");
         }
     }
 
@@ -396,24 +491,196 @@ public class ClaudeService
     private static ProjectAnalysis ParseAnalysis(string text, string promptSent)
     {
         text = text.Trim();
+
+        Console.WriteLine("[DEBUG] ParseAnalysis - Texto original:");
+        Console.WriteLine(text.Length > 500 ? text.Substring(0, 500) + "..." : text);
+
         if (text.StartsWith("```"))
         {
             var start = text.IndexOf('{');
             var end = text.LastIndexOf('}');
             if (start >= 0 && end > start)
+            {
                 text = text[start..(end + 1)];
+                Console.WriteLine("[DEBUG] ParseAnalysis - Texto após remover markdown:");
+                Console.WriteLine(text.Length > 500 ? text.Substring(0, 500) + "..." : text);
+            }
         }
 
-        var parsed = JsonSerializer.Deserialize<ClaudeAnalysisJson>(text, new JsonSerializerOptions
+        // Validar se o JSON está completo
+        if (!IsValidJsonStructure(text))
         {
-            PropertyNameCaseInsensitive = true
-        });
+            Console.WriteLine("[WARNING] JSON parece estar incompleto. Tentando corrigir...");
+            text = TryFixIncompleteJson(text);
+            Console.WriteLine("[DEBUG] JSON após correção:");
+            Console.WriteLine(text.Length > 500 ? text.Substring(text.Length - 500) : text);
+        }
 
-        return new ProjectAnalysis(
-            parsed?.Overview ?? string.Empty,
-            parsed?.Risks ?? string.Empty,
-            parsed?.Recommendations ?? string.Empty,
-            promptSent
-        );
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<ClaudeAnalysisJson>(text, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            Console.WriteLine($"[DEBUG] ParseAnalysis - Overview: {parsed?.Overview?.Substring(0, Math.Min(50, parsed.Overview?.Length ?? 0))}...");
+            Console.WriteLine($"[DEBUG] ParseAnalysis - Tasks Count: {parsed?.Tasks?.Count ?? 0}");
+
+            var tasks = parsed?.Tasks?.Select(t => new TaskSuggestion(
+                t.Name ?? "Tarefa sem nome",
+                t.Description,
+                t.Priority ?? "Média",
+                t.SuggestedResponsible,
+                t.DeadlineInDays,
+                t.Order
+            )).ToList() ?? new List<TaskSuggestion>();
+
+            Console.WriteLine($"[DEBUG] ParseAnalysis - Tarefas processadas: {tasks.Count}");
+
+            return new ProjectAnalysis(
+                parsed?.Overview ?? string.Empty,
+                parsed?.Risks ?? string.Empty,
+                parsed?.Recommendations ?? string.Empty,
+                tasks,
+                promptSent
+            );
+        }
+        catch (JsonException jsonEx)
+        {
+            Console.WriteLine($"[ERROR] Erro de desserialização JSON: {jsonEx.Message}");
+            Console.WriteLine($"[ERROR] Path: {jsonEx.Path}");
+            Console.WriteLine($"[ERROR] LineNumber: {jsonEx.LineNumber}");
+            Console.WriteLine($"[ERROR] Últimos 1000 caracteres do JSON:");
+            Console.WriteLine(text.Length > 1000 ? text.Substring(text.Length - 1000) : text);
+            throw;
+        }
+    }
+
+    private static bool IsValidJsonStructure(string json)
+    {
+        int braceCount = 0;
+        int bracketCount = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        foreach (char c in json)
+        {
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString)
+            {
+                if (c == '{') braceCount++;
+                else if (c == '}') braceCount--;
+                else if (c == '[') bracketCount++;
+                else if (c == ']') bracketCount--;
+            }
+        }
+
+        return braceCount == 0 && bracketCount == 0;
+    }
+
+    private static string TryFixIncompleteJson(string json)
+    {
+        // Contar abertura e fechamento de chaves e colchetes
+        int braceCount = 0;
+        int bracketCount = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        foreach (char c in json)
+        {
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString)
+            {
+                if (c == '{') braceCount++;
+                else if (c == '}') braceCount--;
+                else if (c == '[') bracketCount++;
+                else if (c == ']') bracketCount--;
+            }
+        }
+
+        // Remover último objeto/elemento incompleto se necessário
+        var result = new StringBuilder(json);
+
+        // Se estamos dentro de uma string, fechar a string
+        if (inString)
+        {
+            result.Append('"');
+        }
+
+        // Procurar última vírgula antes de fechar arrays/objetos incompletos
+        if (bracketCount > 0 || braceCount > 0)
+        {
+            // Remover conteúdo incompleto após a última vírgula válida
+            int lastCommaIndex = -1;
+            int currentBraces = braceCount;
+            int currentBrackets = bracketCount;
+
+            for (int i = result.Length - 1; i >= 0; i--)
+            {
+                char c = result[i];
+                if (c == '}') currentBraces++;
+                else if (c == '{') currentBraces--;
+                else if (c == ']') currentBrackets++;
+                else if (c == '[') currentBrackets--;
+                else if (c == ',' && currentBraces == braceCount && currentBrackets == bracketCount)
+                {
+                    lastCommaIndex = i;
+                    break;
+                }
+            }
+
+            if (lastCommaIndex > 0)
+            {
+                result.Length = lastCommaIndex;
+            }
+        }
+
+        // Fechar arrays abertos
+        for (int i = 0; i < bracketCount; i++)
+        {
+            result.Append(']');
+        }
+
+        // Fechar objetos abertos
+        for (int i = 0; i < braceCount; i++)
+        {
+            result.Append('}');
+        }
+
+        return result.ToString();
     }
 }
