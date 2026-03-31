@@ -31,7 +31,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProjectSensitiveData> ProjectSensitiveData { get; set; } = null!;
     public DbSet<Parameter> Parameters { get; set; } = null!;
     public DbSet<Board> Board { get; set; } = null!;
-    public DbSet<BoardDependency> BoardDependencies { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -682,43 +681,6 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
 
             entity.HasIndex(e => new { e.ProjectId, e.OrdemNoBoard })
                 .HasDatabaseName("IX_BoardTask_ProjectId_OrdemNoBoard");
-        });
-
-        // ========================================================================
-        // Configuração de BoardDependency (dependências entre tarefas)
-        // ========================================================================
-        modelBuilder.Entity<BoardDependency>(entity =>
-        {
-            entity.ToTable("BoardDependencies");
-
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.BoardId)
-                .IsRequired();
-
-            entity.Property(e => e.DependsOnBoardId)
-                .IsRequired();
-
-            // Relacionamento: Uma tarefa tem muitas dependências (tarefas das quais depende)
-            entity.HasOne(e => e.Board)
-                .WithMany(b => b.Dependencies)
-                .HasForeignKey(e => e.BoardId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Relacionamento: Uma tarefa pode ser dependência de muitas outras tarefas
-            entity.HasOne(e => e.DependsOnBoard)
-                .WithMany(b => b.DependentTasks)
-                .HasForeignKey(e => e.DependsOnBoardId)
-                .OnDelete(DeleteBehavior.Restrict); // Não permite deletar tarefa que é dependência de outras
-
-            // Índice único composto para evitar dependências duplicadas
-            entity.HasIndex(e => new { e.BoardId, e.DependsOnBoardId })
-                .IsUnique()
-                .HasDatabaseName("IX_BoardDependency_BoardId_DependsOnBoardId");
-
-            // Índice para melhorar performance de consultas de tarefas dependentes
-            entity.HasIndex(e => e.DependsOnBoardId)
-                .HasDatabaseName("IX_BoardDependency_DependsOnBoardId");
         });
     }
 }

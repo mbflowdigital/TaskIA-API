@@ -222,6 +222,28 @@ public class BoardController : ControllerBase
     }
 
     /// <summary>
+    /// Altera a ordem da tarefa no board
+    /// </summary>
+    /// <param name="id">ID da tarefa</param>
+    /// <param name="request">Nova ordem</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpPut("{id:guid}/ordem")]
+    [ProducesResponseType(typeof(Result<BoardDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateOrdem(
+        [FromRoute] Guid id,
+        [FromBody] UpdateBoardOrdemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.UpdateOrdemAsync(id, request, cancellationToken);
+
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Remove uma tarefa (soft delete)
     /// </summary>
     /// <param name="id">ID da tarefa</param>
@@ -254,93 +276,6 @@ public class BoardController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _boardService.GetStatisticsByProjectIdAsync(projectId, cancellationToken);
-
-        if (!result.IsSuccess)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    // Endpoints de gerenciamento de dependências
-
-    /// <summary>
-    /// Adiciona uma dependência a uma tarefa
-    /// </summary>
-    /// <param name="id">ID da tarefa que terá a dependência</param>
-    /// <param name="request">ID da tarefa da qual depende</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpPost("{id:guid}/dependencies")]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AddDependency(
-        [FromRoute] Guid id,
-        [FromBody] AddDependencyRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.AddDependencyAsync(id, request, cancellationToken);
-
-        if (!result.IsSuccess)
-            return result.Message.Contains("não encontrad") ? NotFound(result) : BadRequest(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Remove uma dependência de uma tarefa
-    /// </summary>
-    /// <param name="id">ID da tarefa</param>
-    /// <param name="dependsOnBoardId">ID da tarefa de dependência a ser removida</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpDelete("{id:guid}/dependencies/{dependsOnBoardId:guid}")]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveDependency(
-        [FromRoute] Guid id,
-        [FromRoute] Guid dependsOnBoardId,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.RemoveDependencyAsync(id, dependsOnBoardId, cancellationToken);
-
-        if (!result.IsSuccess)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Obtém todas as dependências de uma tarefa
-    /// </summary>
-    /// <param name="id">ID da tarefa</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("{id:guid}/dependencies")]
-    [ProducesResponseType(typeof(Result<IEnumerable<BoardDependencyDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDependencies(
-        [FromRoute] Guid id,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetDependenciesAsync(id, cancellationToken);
-
-        if (!result.IsSuccess)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Verifica se uma tarefa está bloqueada por dependências
-    /// </summary>
-    /// <param name="id">ID da tarefa</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("{id:guid}/blocking-info")]
-    [ProducesResponseType(typeof(Result<BoardBlockingInfoDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlockingInfo(
-        [FromRoute] Guid id,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetBlockingInfoAsync(id, cancellationToken);
 
         if (!result.IsSuccess)
             return NotFound(result);

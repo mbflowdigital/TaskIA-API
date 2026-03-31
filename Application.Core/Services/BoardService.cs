@@ -15,20 +15,17 @@ public class BoardService : IBoardService
     private readonly IBoardRepository _boardRepository;
     private readonly IProjectRepository _projectRepository;
     private readonly IUserRepository _userRepository;
-    private readonly IBoardDependencyRepository _dependencyRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public BoardService(
         IBoardRepository boardRepository,
         IProjectRepository projectRepository,
         IUserRepository userRepository,
-        IBoardDependencyRepository dependencyRepository,
         IUnitOfWork unitOfWork)
     {
         _boardRepository = boardRepository;
         _projectRepository = projectRepository;
         _userRepository = userRepository;
-        _dependencyRepository = dependencyRepository;
         _unitOfWork = unitOfWork;
     }
 
@@ -99,10 +96,13 @@ public class BoardService : IBoardService
         if (!IsValidPriority(request.Priority))
             return Result<BoardDto>.Failure("Prioridade inválida. Valores aceitos: Baixa, Média, Alta, Crítica");
 
+        User? responsavel = null;
+        User? sugestao = null;
+
         // Validar responsável se fornecido
         if (request.ResponsavelId.HasValue)
         {
-            var responsavel = await _userRepository.GetByIdAsync(request.ResponsavelId.Value, cancellationToken);
+            responsavel = await _userRepository.GetByIdAsync(request.ResponsavelId.Value, cancellationToken);
             if (responsavel == null)
                 return Result<BoardDto>.Failure("Responsável não encontrado.");
         }
@@ -110,7 +110,7 @@ public class BoardService : IBoardService
         // Validar sugestão de responsável se fornecido
         if (request.SugestaoResponsavelId.HasValue)
         {
-            var sugestao = await _userRepository.GetByIdAsync(request.SugestaoResponsavelId.Value, cancellationToken);
+            sugestao = await _userRepository.GetByIdAsync(request.SugestaoResponsavelId.Value, cancellationToken);
             if (sugestao == null)
                 return Result<BoardDto>.Failure("Usuário sugerido não encontrado.");
         }
@@ -132,10 +132,21 @@ public class BoardService : IBoardService
         }
 
         await _boardRepository.AddAsync(board, cancellationToken);
+
+        // TODO: Implementar lógica de reorganização automática de ordens
+        // Quando uma tarefa é criada com uma ordem específica, as outras tarefas
+        // com ordem >= devem ser incrementadas automaticamente
+
         await _unitOfWork.CommitAsync(cancellationToken);
 
-        var createdBoard = await _boardRepository.GetByIdWithProjectAsync(board.Id, cancellationToken);
-        var boardDto = MapToDto(createdBoard!);
+        // Carregar relacionamentos manualmente para evitar segunda query
+        board.Project = project;
+        if (responsavel != null)
+            board.Responsavel = responsavel;
+        if (sugestao != null)
+            board.SugestaoResponsavel = sugestao;
+
+        var boardDto = MapToDto(board);
 
         return Result<BoardDto>.Success(boardDto, "Tarefa criada com sucesso.");
     }
@@ -149,6 +160,16 @@ public class BoardService : IBoardService
         if (!IsValidPriority(request.Priority))
             return Result<BoardDto>.Failure("Prioridade inválida. Valores aceitos: Baixa, Média, Alta, Crítica");
 
+        // Se a tarefa não está com status "A Fazer", validar a mudança de prioridade
+        // Para evitar que uma tarefa em andamento ou concluída seja rebaixada indevidamente
+        if (board.Status != "A Fazer")
+        {
+            // Validar se a nova prioridade é permitida baseado no estado atual das outras tarefas
+            var validacaoPrioridade = await ValidarAlteracaoStatusPorPrioridadeAsync(board.ProjectId, request.Priority, cancellationToken);
+            if (!validacaoPrioridade.IsSuccess)
+                return Result<BoardDto>.Failure($"Não é possível alterar a prioridade para '{request.Priority}'. {validacaoPrioridade.Message}");
+        }
+
         board.UpdateInfo(
             name: request.Name,
             description: request.Description,
@@ -160,10 +181,17 @@ public class BoardService : IBoardService
         board.UpdatePriority(request.Priority);
 
         await _boardRepository.UpdateAsync(board, cancellationToken);
+
+        // TODO: Implementar lógica de reorganização automática de ordens
+        // Quando a ordem é alterada, as outras tarefas devem ser reorganizadas
+
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
-        var boardDto = MapToDto(updatedBoard!);
+        if (updatedBoard == null)
+            return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
+
+        var boardDto = MapToDto(updatedBoard);
 
         return Result<BoardDto>.Success(boardDto, "Tarefa atualizada com sucesso.");
     }
@@ -188,7 +216,10 @@ public class BoardService : IBoardService
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
-        var boardDto = MapToDto(updatedBoard!);
+        if (updatedBoard == null)
+            return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
+
+        var boardDto = MapToDto(updatedBoard);
 
         return Result<BoardDto>.Success(boardDto, "Responsável atribuído com sucesso.");
     }
@@ -213,7 +244,10 @@ public class BoardService : IBoardService
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
-        var boardDto = MapToDto(updatedBoard!);
+        if (updatedBoard == null)
+            return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
+
+        var boardDto = MapToDto(updatedBoard);
 
         return Result<BoardDto>.Success(boardDto, "Sugestão de responsável atribuída com sucesso.");
     }
@@ -227,22 +261,10 @@ public class BoardService : IBoardService
         if (!IsValidStatus(request.Status))
             return Result<BoardDto>.Failure("Status inválido. Valores aceitos: A Fazer, Em Andamento, Concluído");
 
-        // Validação de dependências: só permite iniciar se não houver bloqueios
-        if (request.Status == "Em Andamento" && board.Status == "A Fazer")
-        {
-            var dependencies = await _dependencyRepository.GetDependenciesAsync(id, cancellationToken);
-            var blockingDeps = dependencies.Where(d => d.IsBlocking()).ToList();
-
-            if (blockingDeps.Any())
-            {
-                var blockingNames = string.Join(", ", blockingDeps.Select(d => d.DependsOnBoard.Name));
-                return Result<BoardDto>.Failure(
-                    $"Não é possível iniciar esta tarefa. Ela depende de {blockingDeps.Count} tarefa(s) não concluída(s): {blockingNames}");
-            }
-        }
-
-        // Permitir voltar para "A Fazer" de qualquer status
-        // Permitir avançar se não houver bloqueios
+        // Validar regra de prioridade antes de alterar o status
+        var validacaoPrioridade = await ValidarAlteracaoStatusPorPrioridadeAsync(board.ProjectId, board.Priority, cancellationToken);
+        if (!validacaoPrioridade.IsSuccess)
+            return Result<BoardDto>.Failure(validacaoPrioridade.Message);
 
         board.UpdateStatus(request.Status);
 
@@ -250,9 +272,37 @@ public class BoardService : IBoardService
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
-        var boardDto = MapToDto(updatedBoard!);
+        if (updatedBoard == null)
+            return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
+
+        var boardDto = MapToDto(updatedBoard);
 
         return Result<BoardDto>.Success(boardDto, "Status atualizado com sucesso.");
+    }
+
+    public async Task<Result<BoardDto>> UpdateOrdemAsync(Guid id, UpdateBoardOrdemRequest request, CancellationToken cancellationToken = default)
+    {
+        var board = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
+        if (board == null)
+            return Result<BoardDto>.Failure("Tarefa não encontrada.");
+
+        // Validar se a ordem é válida
+        if (string.IsNullOrWhiteSpace(request.OrdemNoBoard))
+            return Result<BoardDto>.Failure("Ordem não pode ser vazia.");
+
+        // Atualizar a ordem da tarefa
+        board.UpdateOrdemNoBoard(request.OrdemNoBoard);
+        await _boardRepository.UpdateAsync(board, cancellationToken);
+
+        // TODO: Implementar lógica de reorganização automática de ordens
+        // Quando a ordem é alterada, as outras tarefas com ordem >= devem ser incrementadas
+        // Exemplo: Se mover para posição 2, as tarefas 2, 3, 4... devem virar 3, 4, 5...
+
+        await _unitOfWork.CommitAsync(cancellationToken);
+
+        var boardDto = MapToDto(board);
+
+        return Result<BoardDto>.Success(boardDto, "Ordem atualizada com sucesso.");
     }
 
     public async Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -326,104 +376,91 @@ public class BoardService : IBoardService
         return validPriorities.Contains(priority);
     }
 
-    // Métodos de gerenciamento de dependências
-
-    public async Task<Result> AddDependencyAsync(Guid boardId, AddDependencyRequest request, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Valida se uma tarefa pode ter seu status alterado baseado na prioridade e no estado das outras tarefas do projeto
+    /// Regra: Tarefas de menor prioridade só podem ser alteradas se todas as de maior prioridade estiverem concluídas
+    /// </summary>
+    private async Task<Result> ValidarAlteracaoStatusPorPrioridadeAsync(Guid projectId, string prioridade, CancellationToken cancellationToken)
     {
-        // Validar se a tarefa existe
-        var board = await _boardRepository.GetByIdAsync(boardId, cancellationToken);
-        if (board == null)
-            return Result.Failure("Tarefa não encontrada.");
+        // Tarefas Críticas e Altas podem ser alteradas sempre
+        if (prioridade == "Crítica" || prioridade == "Alta")
+            return Result.Success();
 
-        // Validar se a tarefa da dependência existe
-        var dependsOnBoard = await _boardRepository.GetByIdAsync(request.DependsOnBoardId, cancellationToken);
-        if (dependsOnBoard == null)
-            return Result.Failure("Tarefa de dependência não encontrada.");
+        // Buscar todas as tarefas ativas do projeto
+        var todasTarefas = await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken);
+        var tarefasList = todasTarefas.ToList();
 
-        // Não permitir que uma tarefa dependa dela mesma
-        if (boardId == request.DependsOnBoardId)
-            return Result.Failure("Uma tarefa não pode depender dela mesma.");
+        // Para tarefas de prioridade Média: verificar se existem tarefas Críticas ou Altas não concluídas
+        if (prioridade == "Média")
+        {
+            var tarefasAltaPrioridadeNaoConcluidas = tarefasList
+                .Where(t => (t.Priority == "Crítica" || t.Priority == "Alta") && t.Status != "Concluído")
+                .ToList();
 
-        // Verificar se as tarefas são do mesmo projeto
-        if (board.ProjectId != dependsOnBoard.ProjectId)
-            return Result.Failure("As tarefas devem pertencer ao mesmo projeto.");
+            if (tarefasAltaPrioridadeNaoConcluidas.Any())
+            {
+                var count = tarefasAltaPrioridadeNaoConcluidas.Count;
+                var prioridades = string.Join(", ", tarefasAltaPrioridadeNaoConcluidas.Select(t => t.Priority).Distinct());
+                return Result.Failure($"Não é possível alterar o status desta tarefa de prioridade Média. Existem {count} tarefa(s) de prioridade {prioridades} não concluída(s).");
+            }
+        }
 
-        // Verificar se a dependência já existe
-        var exists = await _dependencyRepository.ExistsAsync(boardId, request.DependsOnBoardId, cancellationToken);
-        if (exists)
-            return Result.Failure("Esta dependência já existe.");
+        // Para tarefas de prioridade Baixa: verificar se existem tarefas Críticas, Altas ou Médias não concluídas
+        if (prioridade == "Baixa")
+        {
+            var tarefasMaiorPrioridadeNaoConcluidas = tarefasList
+                .Where(t => (t.Priority == "Crítica" || t.Priority == "Alta" || t.Priority == "Média") && t.Status != "Concluído")
+                .ToList();
 
-        // Verificar se criar esta dependência causaria um ciclo
-        var wouldCreateCycle = await _dependencyRepository.WouldCreateCycleAsync(boardId, request.DependsOnBoardId, cancellationToken);
-        if (wouldCreateCycle)
-            return Result.Failure("Não é possível criar esta dependência pois causaria uma dependência circular.");
+            if (tarefasMaiorPrioridadeNaoConcluidas.Any())
+            {
+                var count = tarefasMaiorPrioridadeNaoConcluidas.Count;
+                var prioridades = string.Join(", ", tarefasMaiorPrioridadeNaoConcluidas.Select(t => t.Priority).Distinct());
+                return Result.Failure($"Não é possível alterar o status desta tarefa de prioridade Baixa. Existem {count} tarefa(s) de prioridade {prioridades} não concluída(s).");
+            }
+        }
 
-        // Criar a dependência
-        var dependency = new Domain.Entities.BoardDependency(boardId, request.DependsOnBoardId);
-        await _dependencyRepository.AddAsync(dependency, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
-
-        return Result.Success("Dependência adicionada com sucesso.");
+        return Result.Success();
     }
 
-    public async Task<Result> RemoveDependencyAsync(Guid boardId, Guid dependsOnBoardId, CancellationToken cancellationToken = default)
+    // TODO: Implementar reorganização automática de ordens
+    // Este método será usado para reorganizar automaticamente as ordens das tarefas
+    // quando uma tarefa é inserida ou movida para uma posição específica
+    /*
+    /// <summary>
+    /// Reorganiza as ordens de todas as tarefas do projeto quando uma tarefa é inserida/movida para uma posição específica
+    /// </summary>
+    private async Task ReorganizarOrdensAsync(Guid projectId, Guid boardId, string? novaOrdem, CancellationToken cancellationToken)
     {
-        var board = await _boardRepository.GetByIdAsync(boardId, cancellationToken);
-        if (board == null)
-            return Result.Failure("Tarefa não encontrada.");
+        // Se não foi fornecida uma ordem, não faz nada
+        if (string.IsNullOrWhiteSpace(novaOrdem))
+            return;
 
-        var removed = await _dependencyRepository.RemoveDependencyAsync(boardId, dependsOnBoardId, cancellationToken);
-        if (!removed)
-            return Result.Failure("Dependência não encontrada.");
+        // Validar se a ordem é um número válido
+        if (!int.TryParse(novaOrdem, out int ordemDesejada) || ordemDesejada < 1)
+            return;
 
-        await _unitOfWork.CommitAsync(cancellationToken);
+        // Buscar todas as tarefas do projeto (exceto a que está sendo alterada)
+        var allBoards = (await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken))
+            .Where(b => b.Id != boardId)
+            .OrderBy(b => {
+                if (int.TryParse(b.OrdemNoBoard, out int ordem))
+                    return ordem;
+                return 999999;
+            })
+            .ThenBy(b => b.CreatedAt)
+            .ToList();
 
-        return Result.Success("Dependência removida com sucesso.");
+        // Incrementar a ordem de todas as tarefas que estão na posição desejada ou depois
+        foreach (var board in allBoards)
+        {
+            if (int.TryParse(board.OrdemNoBoard, out int ordemAtual) && ordemAtual >= ordemDesejada)
+            {
+                var novaOrdemBoard = (ordemAtual + 1).ToString();
+                board.UpdateOrdemNoBoard(novaOrdemBoard);
+                await _boardRepository.UpdateAsync(board, cancellationToken);
+            }
+        }
     }
-
-    public async Task<Result<IEnumerable<BoardDependencyDto>>> GetDependenciesAsync(Guid boardId, CancellationToken cancellationToken = default)
-    {
-        var board = await _boardRepository.GetByIdAsync(boardId, cancellationToken);
-        if (board == null)
-            return Result<IEnumerable<BoardDependencyDto>>.Failure("Tarefa não encontrada.");
-
-        var dependencies = await _dependencyRepository.GetDependenciesAsync(boardId, cancellationToken);
-        var dtos = dependencies.Select(d => new BoardDependencyDto(
-            Id: d.Id,
-            BoardId: d.BoardId,
-            DependsOnBoardId: d.DependsOnBoardId,
-            DependsOnBoardName: d.DependsOnBoard.Name,
-            DependsOnBoardStatus: d.DependsOnBoard.Status,
-            IsBlocking: d.IsBlocking()
-        )).ToList();
-
-        return Result<IEnumerable<BoardDependencyDto>>.Success(dtos);
-    }
-
-    public async Task<Result<BoardBlockingInfoDto>> GetBlockingInfoAsync(Guid boardId, CancellationToken cancellationToken = default)
-    {
-        var board = await _boardRepository.GetByIdAsync(boardId, cancellationToken);
-        if (board == null)
-            return Result<BoardBlockingInfoDto>.Failure("Tarefa não encontrada.");
-
-        var dependencies = await _dependencyRepository.GetDependenciesAsync(boardId, cancellationToken);
-        var blockingDeps = dependencies.Where(d => d.IsBlocking()).ToList();
-
-        var blockingDtos = blockingDeps.Select(d => new BoardDependencyDto(
-            Id: d.Id,
-            BoardId: d.BoardId,
-            DependsOnBoardId: d.DependsOnBoardId,
-            DependsOnBoardName: d.DependsOnBoard.Name,
-            DependsOnBoardStatus: d.DependsOnBoard.Status,
-            IsBlocking: true
-        )).ToList();
-
-        var blockingInfo = new BoardBlockingInfoDto(
-            IsBlocked: blockingDeps.Any(),
-            BlockingDependenciesCount: blockingDeps.Count,
-            BlockingDependencies: blockingDtos
-        );
-
-        return Result<BoardBlockingInfoDto>.Success(blockingInfo);
-    }
+    */
 }

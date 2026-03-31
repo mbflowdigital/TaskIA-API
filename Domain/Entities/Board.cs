@@ -47,12 +47,6 @@ public class Board : BaseEntity
     [ForeignKey(nameof(ResponsavelId))]
     public virtual User? Responsavel { get; set; }
 
-    // Dependências: Tarefas das quais esta tarefa depende
-    public virtual ICollection<BoardDependency> Dependencies { get; set; } = new List<BoardDependency>();
-
-    // Tarefas que dependem desta tarefa
-    public virtual ICollection<BoardDependency> DependentTasks { get; set; } = new List<BoardDependency>();
-
     // Construtor público
     public Board() { }
 
@@ -191,21 +185,5 @@ public class Board : BaseEntity
     {
         Deactivate();
         SetUpdatedAt();
-    }
-
-    /// <summary>
-    /// Verifica se a tarefa está bloqueada por dependências não concluídas
-    /// </summary>
-    public bool HasBlockingDependencies()
-    {
-        return Dependencies.Any(d => d.IsBlocking());
-    }
-
-    /// <summary>
-    /// Obtém lista de dependências que estão bloqueando a tarefa
-    /// </summary>
-    public IEnumerable<BoardDependency> GetBlockingDependencies()
-    {
-        return Dependencies.Where(d => d.IsBlocking()).ToList();
     }
 }

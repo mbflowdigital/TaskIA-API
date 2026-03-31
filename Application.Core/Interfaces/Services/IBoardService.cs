@@ -55,6 +55,11 @@ public interface IBoardService
     Task<Result<BoardDto>> UpdateStatusAsync(Guid id, UpdateBoardStatusRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Altera a ordem da tarefa no board
+    /// </summary>
+    Task<Result<BoardDto>> UpdateOrdemAsync(Guid id, UpdateBoardOrdemRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Remove uma tarefa (soft delete)
     /// </summary>
     Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
@@ -63,26 +68,4 @@ public interface IBoardService
     /// Obtém estatísticas de tarefas por projeto
     /// </summary>
     Task<Result<BoardStatisticsDto>> GetStatisticsByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
-
-    // Métodos de gerenciamento de dependências
-
-    /// <summary>
-    /// Adiciona uma dependência a uma tarefa
-    /// </summary>
-    Task<Result> AddDependencyAsync(Guid boardId, AddDependencyRequest request, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Remove uma dependência de uma tarefa
-    /// </summary>
-    Task<Result> RemoveDependencyAsync(Guid boardId, Guid dependsOnBoardId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Obtém todas as dependências de uma tarefa
-    /// </summary>
-    Task<Result<IEnumerable<BoardDependencyDto>>> GetDependenciesAsync(Guid boardId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Verifica se uma tarefa está bloqueada por dependências
-    /// </summary>
-    Task<Result<BoardBlockingInfoDto>> GetBlockingInfoAsync(Guid boardId, CancellationToken cancellationToken = default);
 }
