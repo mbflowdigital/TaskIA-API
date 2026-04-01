@@ -158,6 +158,29 @@ public class BoardController : ControllerBase
     }
 
     /// <summary>
+    /// Altera o prazo estimado de uma tarefa
+    /// </summary>
+    /// <param name="id">ID da tarefa</param>
+    /// <param name="request">Novo prazo em dias</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpPut("{id:guid}/prazo")]
+    [ProducesResponseType(typeof(Result<BoardDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdatePrazo(
+        [FromRoute] Guid id,
+        [FromBody] UpdateBoardPrazoRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.UpdatePrazoAsync(id, request, cancellationToken);
+
+        if (!result.IsSuccess)
+            return result.Message.Contains("não encontrada") ? NotFound(result) : BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Obtém todas as tarefas de um projeto
     /// </summary>
     /// <param name="projectId">ID do projeto</param>
