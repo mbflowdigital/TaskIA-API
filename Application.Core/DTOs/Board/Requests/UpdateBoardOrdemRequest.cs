@@ -4,5 +4,5 @@ namespace Application.Core.DTOs.Board.Requests;
 /// Request para alterar a ordem da tarefa no Board
 /// </summary>
 public record UpdateBoardOrdemRequest(
-    string OrdemNoBoard
+    decimal OrdemNoBoard
 );

@@ -527,7 +527,7 @@ Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicion
       ""priority"": ""Baixa|Média|Alta|Crítica"",
       ""suggestedResponsible"": ""Nome ou papel sugerido para responsável (opcional)"",
       ""deadlineInDays"": 7,
-      ""order"": ""1""
+      ""order"": 1000
     },
     {
       ""name"": ""Segunda tarefa"",
@@ -535,7 +535,7 @@ Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicion
       ""priority"": ""Alta"",
       ""suggestedResponsible"": ""Desenvolvedor"",
       ""deadlineInDays"": 14,
-      ""order"": ""2""
+      ""order"": 2000
     }
   ]
 }
@@ -549,7 +549,7 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
   • priority (string, obrigatório, valores aceitos: Baixa, Média, Alta, Crítica)
   • suggestedResponsible (string, opcional, máximo 200 caracteres)
   • deadlineInDays (number, obrigatório, número inteiro positivo)
-  • order (string, obrigatório, sequência iniciando em ""1"")
+  • order (number, obrigatório, valor decimal para ordenação)
 
 🚫 PROIBIDO:
   • Adicionar campos extras que não estão na estrutura acima
@@ -582,11 +582,14 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
   • Represente sempre o prazo em dias a partir do início do projeto
 
 🔢 REGRAS DE ORDENAÇÃO (campo order):
-  • SEMPRE iniciar em ""1"" (string)
-  • Incrementar sequencialmente: ""1"", ""2"", ""3"", ""4"", etc.
+  • Use valores decimais para garantir flexibilidade na reordenação
+  • SEMPRE iniciar em 1000 (número decimal)
+  • Incrementar de 1000 em 1000: 1000, 2000, 3000, 4000, etc.
+  • Este sistema permite inserir tarefas entre outras sem reorganizar tudo (ex: entre 1000 e 2000, pode inserir 1500)
   • Seguir ordem lógica de execução e dependências
-  • Tarefas que são pré-requisitos devem vir primeiro
+  • Tarefas que são pré-requisitos devem vir primeiro (valores menores)
   • Tarefas críticas devem ser priorizadas no início quando possível
+  • IMPORTANTE: O valor deve ser numérico (number), NÃO string
 
 👤 REGRAS DE RESPONSÁVEL (campo suggestedResponsible):
   • Baseie-se SEMPRE nos papéis e membros da equipe informados

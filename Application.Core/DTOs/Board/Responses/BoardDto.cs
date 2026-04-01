@@ -12,7 +12,7 @@ public record BoardDto(
     string Status,
     string Priority,
     int PrazoEmDias,
-    string? OrdemNoBoard,
+    decimal OrdemNoBoard,
     Guid? ResponsavelId,
     string? ResponsavelName,
     Guid? SugestaoResponsavelId,

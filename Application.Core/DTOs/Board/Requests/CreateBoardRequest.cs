@@ -10,7 +10,7 @@ public record CreateBoardRequest(
     string Status,
     string Priority,
     int PrazoEmDias,
-    string? OrdemNoBoard,
+    decimal OrdemNoBoard,
     Guid? ResponsavelId,
     Guid? SugestaoResponsavelId
 );

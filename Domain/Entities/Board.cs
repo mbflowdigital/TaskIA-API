@@ -31,8 +31,7 @@ public class Board : BaseEntity
 
     public int PrazoEmDias { get; set; }
 
-    [MaxLength(50)]
-    public string? OrdemNoBoard { get; set; }
+    public decimal OrdemNoBoard { get; set; }
 
     // Relacionamento com Project
     [Required]
@@ -61,7 +60,7 @@ public class Board : BaseEntity
         string priority,
         Guid? sugestaoResponsavelId,
         int prazoEmDias,
-        string? ordemNoBoard)
+        decimal ordemNoBoard)
     {
         ProjectId = projectId;
         Name = name;
@@ -81,7 +80,7 @@ public class Board : BaseEntity
         string? description,
         Guid? sugestaoResponsavelId,
         int prazoEmDias,
-        string? ordemNoBoard)
+        decimal ordemNoBoard)
     {
         Name = name;
         Description = description;
@@ -118,7 +117,7 @@ public class Board : BaseEntity
     /// <summary>
     /// Atualiza ordem no board
     /// </summary>
-    public void UpdateOrdemNoBoard(string ordemNoBoard)
+    public void UpdateOrdemNoBoard(decimal ordemNoBoard)
     {
         OrdemNoBoard = ordemNoBoard;
         SetUpdatedAt();

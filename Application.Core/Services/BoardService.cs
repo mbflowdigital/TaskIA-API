@@ -1,3 +1,4 @@
+using Application.Core.DTOs.Board.Extensions;
 using Application.Core.DTOs.Board.Requests;
 using Application.Core.DTOs.Board.Responses;
 using Application.Core.Interfaces.Services;
@@ -36,7 +37,7 @@ public class BoardService : IBoardService
             return Result<IEnumerable<BoardDto>>.Failure("Projeto não encontrado.");
 
         var boards = await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken);
-        var boardDtos = boards.Select(MapToDto).ToList();
+        var boardDtos = boards.ToDto();
 
         return Result<IEnumerable<BoardDto>>.Success(boardDtos);
     }
@@ -51,7 +52,7 @@ public class BoardService : IBoardService
             return Result<IEnumerable<BoardDto>>.Failure("Status inválido. Valores aceitos: A Fazer, Em Andamento, Concluído");
 
         var boards = await _boardRepository.GetByProjectIdAndStatusAsync(projectId, status, cancellationToken);
-        var boardDtos = boards.Select(MapToDto).ToList();
+        var boardDtos = boards.ToDto();
 
         return Result<IEnumerable<BoardDto>>.Success(boardDtos);
     }
@@ -66,7 +67,7 @@ public class BoardService : IBoardService
             return Result<IEnumerable<BoardDto>>.Failure("Prioridade inválida. Valores aceitos: Baixa, Média, Alta, Crítica");
 
         var boards = await _boardRepository.GetByProjectIdAndPriorityAsync(projectId, priority, cancellationToken);
-        var boardDtos = boards.Select(MapToDto).ToList();
+        var boardDtos = boards.ToDto();
 
         return Result<IEnumerable<BoardDto>>.Success(boardDtos);
     }
@@ -77,7 +78,7 @@ public class BoardService : IBoardService
         if (board == null)
             return Result<BoardDto>.Failure("Tarefa não encontrada.");
 
-        var boardDto = MapToDto(board);
+        var boardDto = board.ToDto();
         return Result<BoardDto>.Success(boardDto);
     }
 
@@ -115,6 +116,14 @@ public class BoardService : IBoardService
                 return Result<BoardDto>.Failure("Usuário sugerido não encontrado.");
         }
 
+        // Se ordem não foi fornecida, calcular automaticamente para inserir no final
+        // Não filtra por status para garantir unicidade no projeto inteiro
+        var ordem = request.OrdemNoBoard;
+        if (ordem == 0)
+        {
+            ordem = await CalculateOrderAsync(request.ProjectId, status: null, cancellationToken: cancellationToken);
+        }
+
         var board = new Board(
             projectId: request.ProjectId,
             name: request.Name,
@@ -123,7 +132,7 @@ public class BoardService : IBoardService
             priority: request.Priority,
             sugestaoResponsavelId: request.SugestaoResponsavelId,
             prazoEmDias: request.PrazoEmDias,
-            ordemNoBoard: request.OrdemNoBoard
+            ordemNoBoard: ordem
         );
 
         if (request.ResponsavelId.HasValue)
@@ -132,11 +141,6 @@ public class BoardService : IBoardService
         }
 
         await _boardRepository.AddAsync(board, cancellationToken);
-
-        // TODO: Implementar lógica de reorganização automática de ordens
-        // Quando uma tarefa é criada com uma ordem específica, as outras tarefas
-        // com ordem >= devem ser incrementadas automaticamente
-
         await _unitOfWork.CommitAsync(cancellationToken);
 
         // Carregar relacionamentos manualmente para evitar segunda query
@@ -146,7 +150,7 @@ public class BoardService : IBoardService
         if (sugestao != null)
             board.SugestaoResponsavel = sugestao;
 
-        var boardDto = MapToDto(board);
+        var boardDto = board.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Tarefa criada com sucesso.");
     }
@@ -170,28 +174,27 @@ public class BoardService : IBoardService
                 return Result<BoardDto>.Failure($"Não é possível alterar a prioridade para '{request.Priority}'. {validacaoPrioridade.Message}");
         }
 
+        // Se ordem não foi fornecida, manter a ordem atual
+        var ordem = request.OrdemNoBoard == 0 ? board.OrdemNoBoard : request.OrdemNoBoard;
+
         board.UpdateInfo(
             name: request.Name,
             description: request.Description,
             sugestaoResponsavelId: board.SugestaoResponsavelId,
             prazoEmDias: request.PrazoEmDias,
-            ordemNoBoard: request.OrdemNoBoard
+            ordemNoBoard: ordem
         );
 
         board.UpdatePriority(request.Priority);
 
         await _boardRepository.UpdateAsync(board, cancellationToken);
-
-        // TODO: Implementar lógica de reorganização automática de ordens
-        // Quando a ordem é alterada, as outras tarefas devem ser reorganizadas
-
         await _unitOfWork.CommitAsync(cancellationToken);
 
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
         if (updatedBoard == null)
             return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
 
-        var boardDto = MapToDto(updatedBoard);
+        var boardDto = updatedBoard.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Tarefa atualizada com sucesso.");
     }
@@ -219,7 +222,7 @@ public class BoardService : IBoardService
         if (updatedBoard == null)
             return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
 
-        var boardDto = MapToDto(updatedBoard);
+        var boardDto = updatedBoard.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Responsável atribuído com sucesso.");
     }
@@ -247,7 +250,7 @@ public class BoardService : IBoardService
         if (updatedBoard == null)
             return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
 
-        var boardDto = MapToDto(updatedBoard);
+        var boardDto = updatedBoard.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Sugestão de responsável atribuída com sucesso.");
     }
@@ -275,7 +278,7 @@ public class BoardService : IBoardService
         if (updatedBoard == null)
             return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
 
-        var boardDto = MapToDto(updatedBoard);
+        var boardDto = updatedBoard.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Status atualizado com sucesso.");
     }
@@ -286,23 +289,50 @@ public class BoardService : IBoardService
         if (board == null)
             return Result<BoardDto>.Failure("Tarefa não encontrada.");
 
-        // Validar se a ordem é válida
-        if (string.IsNullOrWhiteSpace(request.OrdemNoBoard))
-            return Result<BoardDto>.Failure("Ordem não pode ser vazia.");
+        // Se ordem não foi fornecida, calcular automaticamente para inserir no final
+        // Não filtra por status para garantir unicidade no projeto inteiro
+        var ordem = request.OrdemNoBoard;
+        if (ordem == 0)
+        {
+            ordem = await CalculateOrderAsync(board.ProjectId, status: null, cancellationToken: cancellationToken);
+        }
 
-        // Atualizar a ordem da tarefa
-        board.UpdateOrdemNoBoard(request.OrdemNoBoard);
+        board.UpdateOrdemNoBoard(ordem);
         await _boardRepository.UpdateAsync(board, cancellationToken);
-
-        // TODO: Implementar lógica de reorganização automática de ordens
-        // Quando a ordem é alterada, as outras tarefas com ordem >= devem ser incrementadas
-        // Exemplo: Se mover para posição 2, as tarefas 2, 3, 4... devem virar 3, 4, 5...
-
         await _unitOfWork.CommitAsync(cancellationToken);
 
-        var boardDto = MapToDto(board);
+        var boardDto = board.ToDto();
 
         return Result<BoardDto>.Success(boardDto, "Ordem atualizada com sucesso.");
+    }
+
+    public async Task<Result<BoardDto>> UpdatePrazoAsync(Guid id, UpdateBoardPrazoRequest request, CancellationToken cancellationToken = default)
+    {
+        var board = await _boardRepository.GetByIdAsync(id, cancellationToken);
+        if (board == null)
+            return Result<BoardDto>.Failure("Tarefa não encontrada.");
+
+        if (request.PrazoEmDias <= 0)
+            return Result<BoardDto>.Failure("O prazo deve ser maior que zero.");
+
+        board.UpdateInfo(
+            name: board.Name,
+            description: board.Description,
+            sugestaoResponsavelId: board.SugestaoResponsavelId,
+            prazoEmDias: request.PrazoEmDias,
+            ordemNoBoard: board.OrdemNoBoard
+        );
+
+        await _boardRepository.UpdateAsync(board, cancellationToken);
+        await _unitOfWork.CommitAsync(cancellationToken);
+
+        var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
+        if (updatedBoard == null)
+            return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
+
+        var boardDto = updatedBoard.ToDto();
+
+        return Result<BoardDto>.Success(boardDto, "Prazo atualizado com sucesso.");
     }
 
     public async Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -343,27 +373,6 @@ public class BoardService : IBoardService
     }
 
     // Métodos auxiliares
-    private static BoardDto MapToDto(Board board)
-    {
-        return new BoardDto(
-            Id: board.Id,
-            ProjectId: board.ProjectId,
-            ProjectName: board.Project?.Name ?? string.Empty,
-            Name: board.Name,
-            Description: board.Description,
-            Status: board.Status,
-            Priority: board.Priority,
-            PrazoEmDias: board.PrazoEmDias,
-            OrdemNoBoard: board.OrdemNoBoard,
-            ResponsavelId: board.ResponsavelId,
-            ResponsavelName: board.Responsavel?.Name,
-            SugestaoResponsavelId: board.SugestaoResponsavelId,
-            SugestaoResponsavelName: board.SugestaoResponsavel?.Name,
-            CreatedAt: board.CreatedAt,
-            UpdatedAt: board.UpdatedAt
-        );
-    }
-
     private static bool IsValidStatus(string status)
     {
         var validStatuses = new[] { "A Fazer", "Em Andamento", "Concluído" };
@@ -423,44 +432,108 @@ public class BoardService : IBoardService
         return Result.Success();
     }
 
-    // TODO: Implementar reorganização automática de ordens
-    // Este método será usado para reorganizar automaticamente as ordens das tarefas
-    // quando uma tarefa é inserida ou movida para uma posição específica
-    /*
     /// <summary>
-    /// Reorganiza as ordens de todas as tarefas do projeto quando uma tarefa é inserida/movida para uma posição específica
+    /// Calcula a ordem para uma tarefa usando estratégia de média decimal.
+    /// Suporta múltiplas estratégias: por índice, relativa a referência, ou no final da lista.
     /// </summary>
-    private async Task ReorganizarOrdensAsync(Guid projectId, Guid boardId, string? novaOrdem, CancellationToken cancellationToken)
+    /// <param name="projectId">ID do projeto</param>
+    /// <param name="status">Status da coluna (opcional)</param>
+    /// <param name="targetIndex">Índice de destino (para estratégia por posição)</param>
+    /// <param name="referenceOrderValue">Valor de ordem de referência (para estratégia relativa)</param>
+    /// <param name="insertBefore">Inserir antes da referência (para estratégia relativa)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Valor decimal da nova ordem</returns>
+    private async Task<decimal> CalculateOrderAsync(
+        Guid projectId,
+        string? status = null,
+        int? targetIndex = null,
+        decimal? referenceOrderValue = null,
+        bool insertBefore = false,
+        CancellationToken cancellationToken = default)
     {
-        // Se não foi fornecida uma ordem, não faz nada
-        if (string.IsNullOrWhiteSpace(novaOrdem))
-            return;
-
-        // Validar se a ordem é um número válido
-        if (!int.TryParse(novaOrdem, out int ordemDesejada) || ordemDesejada < 1)
-            return;
-
-        // Buscar todas as tarefas do projeto (exceto a que está sendo alterada)
-        var allBoards = (await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken))
-            .Where(b => b.Id != boardId)
-            .OrderBy(b => {
-                if (int.TryParse(b.OrdemNoBoard, out int ordem))
-                    return ordem;
-                return 999999;
-            })
+        var query = await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken);
+        var orderedBoards = (status != null 
+            ? query.Where(b => b.Status == status) 
+            : query)
+            .OrderBy(b => b.OrdemNoBoard)
             .ThenBy(b => b.CreatedAt)
             .ToList();
 
-        // Incrementar a ordem de todas as tarefas que estão na posição desejada ou depois
-        foreach (var board in allBoards)
+        // Lista vazia - ordem inicial
+        if (orderedBoards.Count == 0)
+            return 1000m;
+
+        // Estratégia 1: Por índice de posição
+        if (targetIndex.HasValue)
         {
-            if (int.TryParse(board.OrdemNoBoard, out int ordemAtual) && ordemAtual >= ordemDesejada)
+            if (targetIndex.Value <= 0)
             {
-                var novaOrdemBoard = (ordemAtual + 1).ToString();
-                board.UpdateOrdemNoBoard(novaOrdemBoard);
-                await _boardRepository.UpdateAsync(board, cancellationToken);
+                var firstOrder = orderedBoards[0].OrdemNoBoard;
+                return firstOrder > 1m ? firstOrder - 1000m : firstOrder / 2m;
+            }
+
+            if (targetIndex.Value >= orderedBoards.Count)
+                return orderedBoards[^1].OrdemNoBoard + 1000m;
+
+            var prevOrder = orderedBoards[targetIndex.Value - 1].OrdemNoBoard;
+            var nextOrder = orderedBoards[targetIndex.Value].OrdemNoBoard;
+            return (prevOrder + nextOrder) / 2m;
+        }
+
+        // Estratégia 2: Relativa a uma ordem de referência
+        if (referenceOrderValue.HasValue)
+        {
+            if (insertBefore)
+            {
+                var previousBoard = orderedBoards
+                    .Where(b => b.OrdemNoBoard < referenceOrderValue.Value)
+                    .OrderByDescending(b => b.OrdemNoBoard)
+                    .FirstOrDefault();
+
+                if (previousBoard == null)
+                    return referenceOrderValue.Value > 1m ? referenceOrderValue.Value - 1000m : referenceOrderValue.Value / 2m;
+
+                return (previousBoard.OrdemNoBoard + referenceOrderValue.Value) / 2m;
+            }
+            else
+            {
+                var nextBoard = orderedBoards
+                    .Where(b => b.OrdemNoBoard > referenceOrderValue.Value)
+                    .OrderBy(b => b.OrdemNoBoard)
+                    .FirstOrDefault();
+
+                if (nextBoard == null)
+                    return referenceOrderValue.Value + 1000m;
+
+                return (referenceOrderValue.Value + nextBoard.OrdemNoBoard) / 2m;
             }
         }
+
+        // Estratégia padrão: No final da lista
+        return orderedBoards[^1].OrdemNoBoard + 1000m;
     }
-    */
+
+    /// <summary>
+    /// Rebalanceia as ordens de todas as tarefas quando os valores decimais ficam muito próximos.
+    /// </summary>
+    private async Task RebalanceOrdersCoreAsync(Guid projectId, string? status = null, CancellationToken cancellationToken = default)
+    {
+        var query = await _boardRepository.GetByProjectIdAsync(projectId, cancellationToken);
+        var orderedBoards = (status != null 
+            ? query.Where(b => b.Status == status) 
+            : query)
+            .OrderBy(b => b.OrdemNoBoard)
+            .ThenBy(b => b.CreatedAt)
+            .ToList();
+
+        decimal currentOrder = 1000m;
+        const decimal increment = 1000m;
+
+        foreach (var board in orderedBoards)
+        {
+            board.UpdateOrdemNoBoard(currentOrder);
+            await _boardRepository.UpdateAsync(board, cancellationToken);
+            currentOrder += increment;
+        }
+    }
 }

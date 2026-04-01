@@ -11,7 +11,7 @@ using Microsoft.Extensions.Configuration;
 namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
-public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, string? Order);
+public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
 public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion> Tasks, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
@@ -234,7 +234,7 @@ public class ClaudeService
         public int DeadlineInDays { get; set; }
 
         [JsonPropertyName("order")]
-        public string? Order { get; set; }
+        public decimal Order { get; set; }
     }
 
     public async Task<Result<ProjectAnalysis>> AnalyzeProjectAsync(ProjectAnalysisInput data, CancellationToken cancellationToken = default)

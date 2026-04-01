@@ -60,6 +60,11 @@ public interface IBoardService
     Task<Result<BoardDto>> UpdateOrdemAsync(Guid id, UpdateBoardOrdemRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Altera o prazo de uma tarefa
+    /// </summary>
+    Task<Result<BoardDto>> UpdatePrazoAsync(Guid id, UpdateBoardPrazoRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Remove uma tarefa (soft delete)
     /// </summary>
     Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default);

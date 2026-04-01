@@ -24,92 +24,6 @@ public class BoardController : ControllerBase
     }
 
     /// <summary>
-    /// Obtém todas as tarefas de um projeto
-    /// </summary>
-    /// <param name="projectId">ID do projeto</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("project/{projectId:guid}")]
-    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByProject(
-        [FromRoute] Guid projectId,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetByProjectIdAsync(projectId, cancellationToken);
-
-        if (!result.IsSuccess)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Obtém tarefas de um projeto por status (fase)
-    /// </summary>
-    /// <param name="projectId">ID do projeto</param>
-    /// <param name="status">Status da tarefa (A Fazer, Em Andamento, Concluído)</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("project/{projectId:guid}/status/{status}")]
-    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByProjectAndStatus(
-        [FromRoute] Guid projectId,
-        [FromRoute] string status,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetByProjectIdAndStatusAsync(projectId, status, cancellationToken);
-
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Obtém tarefas de um projeto por prioridade
-    /// </summary>
-    /// <param name="projectId">ID do projeto</param>
-    /// <param name="priority">Prioridade (Baixa, Média, Alta, Crítica)</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("project/{projectId:guid}/priority/{priority}")]
-    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByProjectAndPriority(
-        [FromRoute] Guid projectId,
-        [FromRoute] string priority,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetByProjectIdAndPriorityAsync(projectId, priority, cancellationToken);
-
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Obtém uma tarefa por ID
-    /// </summary>
-    /// <param name="id">ID da tarefa</param>
-    /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(Result<BoardDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(
-        [FromRoute] Guid id,
-        CancellationToken cancellationToken)
-    {
-        var result = await _boardService.GetByIdAsync(id, cancellationToken);
-
-        if (!result.IsSuccess)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    /// <summary>
     /// Cria uma nova tarefa
     /// </summary>
     /// <param name="request">Dados da tarefa</param>
@@ -244,24 +158,91 @@ public class BoardController : ControllerBase
     }
 
     /// <summary>
-    /// Remove uma tarefa (soft delete)
+    /// Obtém todas as tarefas de um projeto
     /// </summary>
-    /// <param name="id">ID da tarefa</param>
+    /// <param name="projectId">ID do projeto</param>
     /// <param name="cancellationToken">Token de cancelamento</param>
-    [HttpDelete("{id:guid}")]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [HttpGet("project/{projectId:guid}")]
+    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(
-        [FromRoute] Guid id,
+    public async Task<IActionResult> GetByProject(
+        [FromRoute] Guid projectId,
         CancellationToken cancellationToken)
     {
-        var result = await _boardService.DeleteAsync(id, cancellationToken);
+        var result = await _boardService.GetByProjectIdAsync(projectId, cancellationToken);
 
         if (!result.IsSuccess)
             return NotFound(result);
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Obtém tarefas de um projeto por status (fase)
+    /// </summary>
+    /// <param name="projectId">ID do projeto</param>
+    /// <param name="status">Status da tarefa (A Fazer, Em Andamento, Concluído)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpGet("project/{projectId:guid}/status/{status}")]
+    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByProjectAndStatus(
+        [FromRoute] Guid projectId,
+        [FromRoute] string status,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.GetByProjectIdAndStatusAsync(projectId, status, cancellationToken);
+
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Obtém tarefas de um projeto por prioridade
+    /// </summary>
+    /// <param name="projectId">ID do projeto</param>
+    /// <param name="priority">Prioridade (Baixa, Média, Alta, Crítica)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpGet("project/{projectId:guid}/priority/{priority}")]
+    [ProducesResponseType(typeof(Result<IEnumerable<BoardDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByProjectAndPriority(
+        [FromRoute] Guid projectId,
+        [FromRoute] string priority,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.GetByProjectIdAndPriorityAsync(projectId, priority, cancellationToken);
+
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Obtém uma tarefa por ID
+    /// </summary>
+    /// <param name="id">ID da tarefa</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(Result<BoardDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetById(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.GetByIdAsync(id, cancellationToken);
+
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
 
     /// <summary>
     /// Obtém estatísticas de tarefas de um projeto
@@ -282,4 +263,27 @@ public class BoardController : ControllerBase
 
         return Ok(result);
     }
+
+
+    /// <summary>
+    /// Remove uma tarefa (soft delete)
+    /// </summary>
+    /// <param name="id">ID da tarefa</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _boardService.DeleteAsync(id, cancellationToken);
+
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    
 }

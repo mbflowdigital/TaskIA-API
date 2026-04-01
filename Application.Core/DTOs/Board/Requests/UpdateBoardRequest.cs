@@ -8,5 +8,5 @@ public record UpdateBoardRequest(
     string? Description,
     string Priority,
     int PrazoEmDias,
-    string? OrdemNoBoard
+    decimal OrdemNoBoard
 );
