@@ -39,6 +39,11 @@ public interface IUserRepository : IRepository<User>
     /// </summary>
     Task<IEnumerable<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Busca usuário por nome (busca parcial, case-insensitive)
+    /// </summary>
+    Task<User?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
+
     // TODO: Adicionar outros métodos específicos conforme necessário
     // Exemplo: Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);
 }
