@@ -251,10 +251,19 @@ public class ClaudeService
 
         var prompt = BuildAnalysisPrompt(promptBaseParam.Valor, data, additionalDocumentContext);
 
+        // Calcular e logar tamanho do prompt
+        var estimatedPromptTokens = prompt.Length / 4;
+        Console.WriteLine($"[INFO] ========================================");
+        Console.WriteLine($"[INFO] Preparando análise completa com IA...");
+        Console.WriteLine($"[INFO] Tamanho do prompt: {prompt.Length} caracteres (~{estimatedPromptTokens} tokens)");
+        Console.WriteLine($"[INFO] Max tokens de resposta: 8192");
+        Console.WriteLine($"[INFO] Timeout configurado: 10 minutos");
+        Console.WriteLine($"[INFO] ========================================");
+
         var requestBody = new
         {
             model = _model,
-            max_tokens = 8192,
+            max_tokens = 8192, // Mantido em 8192 para análise completa
             messages = new[]
             {
                 new { role = "user", content = prompt }
@@ -273,11 +282,39 @@ public class ClaudeService
         HttpResponseMessage response;
         try
         {
+            Console.WriteLine($"[INFO] Enviando requisição para Claude API: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+            Console.WriteLine($"[INFO] Modelo: {_model}");
+            Console.WriteLine($"[INFO] Aguarde... Isso pode levar alguns minutos para análises complexas.");
+
+            var startTime = DateTime.Now;
             response = await _httpClient.SendAsync(request, cancellationToken);
+            var elapsed = (DateTime.Now - startTime).TotalSeconds;
+
+            Console.WriteLine($"[SUCCESS] ✓ Resposta recebida em {elapsed:F2} segundos ({elapsed / 60:F1} minutos)");
+        }
+        catch (TaskCanceledException ex)
+        {
+            Console.WriteLine($"[ERROR] ✗ Timeout: A análise ultrapassou o limite de 10 minutos");
+            Console.WriteLine($"[ERROR] Detalhes: {ex.Message}");
+            return Result<ProjectAnalysis>.Failure(
+                "A análise está demorando mais que o esperado (>10 minutos). " +
+                "Isso pode acontecer com projetos muito complexos ou com muitos documentos anexados. " +
+                "Sugestões: " +
+                "1) Reduza a quantidade de membros da equipe ou dependências; " +
+                "2) Escolha nível de detalhe 'Macro' ao invés de 'Granular'; " +
+                "3) Remova documentos anexados muito grandes; " +
+                "4) Tente novamente em alguns minutos.");
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"[ERROR] ✗ Erro de conexão com Claude API: {ex.Message}");
+            return Result<ProjectAnalysis>.Failure($"Erro de conexão com a API do Claude: {ex.Message}. Verifique sua conexão com a internet.");
         }
         catch (Exception ex)
         {
-            return Result<ProjectAnalysis>.Failure($"Erro ao comunicar com Claude: {ex.Message}");
+            Console.WriteLine($"[ERROR] ✗ Erro inesperado: {ex.Message}");
+            Console.WriteLine($"[ERROR] StackTrace: {ex.StackTrace}");
+            return Result<ProjectAnalysis>.Failure($"Erro inesperado ao comunicar com Claude: {ex.Message}");
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -497,6 +534,10 @@ public class ClaudeService
         if (string.IsNullOrWhiteSpace(additionalDocumentContext))
             return string.Empty;
 
+        // Log do tamanho do contexto adicional
+        Console.WriteLine($"[INFO] Contexto adicional de documentos: {additionalDocumentContext.Length} caracteres (~{additionalDocumentContext.Length / 4} tokens)");
+
+        // Enviar contexto COMPLETO - sem limitações
         return $"\n\n## CONTEXTO ADICIONAL DE DOCUMENTOS\n\nOs seguintes documentos foram fornecidos para fornecer contexto adicional sobre o projeto:\n\n{additionalDocumentContext}\n\nConsidere essas informações ao gerar a análise, tarefas e recomendações.";
     }
 

@@ -48,13 +48,19 @@ builder.Services.AddCrossCutting();
 // Registrar HttpClient para UserService
 builder.Services.AddHttpClient<IUserService, UserService>();
 
-// Registrar ClaudeService com HttpClient dedicado
+// Registrar ClaudeService com HttpClient dedicado e timeout estendido
 builder.Services.AddHttpClient<Infrastructure.Services.ClaudeService>()
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler())
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        MaxConnectionsPerServer = 10,
+        UseProxy = false, // Desabilitar proxy que pode causar timeout
+        AllowAutoRedirect = true
+    })
     .ConfigureHttpClient(client =>
     {
-        client.Timeout = TimeSpan.FromMinutes(5); // 5 minutos para análises complexas com IA
-    });
+        client.Timeout = TimeSpan.FromMinutes(10); // 10 minutos para garantir que prompt completo seja processado
+    })
+    .SetHandlerLifetime(TimeSpan.FromMinutes(15));
 
 // Configurar Controllers
 builder.Services.AddControllers();
