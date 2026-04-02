@@ -1,3 +1,4 @@
+using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -19,10 +20,14 @@ public record ProjectAnalysisResponse(string Overview, string Risks, string Reco
 public class ClaudeController : ControllerBase
 {
     private readonly ClaudeService _claudeService;
+    private readonly IDocumentExtractionService _documentExtractionService;
 
-    public ClaudeController(ClaudeService claudeService)
+    public ClaudeController(
+        ClaudeService claudeService,
+        IDocumentExtractionService documentExtractionService)
     {
         _claudeService = claudeService;
+        _documentExtractionService = documentExtractionService;
     }
 
     /// <summary>
@@ -64,7 +69,7 @@ public class ClaudeController : ControllerBase
         if (string.IsNullOrWhiteSpace(request?.ProjectName))
             return BadRequest(Result.Failure("O nome do projeto é obrigatório."));
 
-        var result = await _claudeService.AnalyzeProjectAsync(request, cancellationToken);
+        var result = await _claudeService.AnalyzeProjectAsync(request, null, cancellationToken);
 
         if (!result.IsSuccess)
             return BadRequest(Result.Failure(result.Message));
@@ -76,4 +81,5 @@ public class ClaudeController : ControllerBase
 
         return Ok(response);
     }
+
 }

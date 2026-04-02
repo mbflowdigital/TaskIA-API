@@ -62,6 +62,7 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
         return await _dbSet
             .Include(p => p.User) // Incluir dados do usu�rio
             .Include(p => p.Company)
+            .Include(p => p.Tasks)
             .Where(p => p.IsActive)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -75,6 +76,7 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
         return await _dbSet
             .Include(p => p.User)
             .Include(p => p.Company)
+            .Include(p => p.Tasks)
             .Where(p => p.IsActive && p.CompanyId == companyId)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);

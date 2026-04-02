@@ -511,19 +511,42 @@ Ranking de Prioridades: {PriorityRanking}
   - Considere as lições aprendidas para evitar erros recorrentes
 
 ═══════════════════════════════════════════════════════════════════
+📄 CONTEXTO ADICIONAL EXTRAÍDO DE DOCUMENTOS
+═══════════════════════════════════════════════════════════════════
+
+ATENÇÃO: Esta seção contém texto extraído de documentos técnicos anexados ao projeto.
+Use estas informações para enriquecer e fundamentar sua análise.
+
+INSTRUÇÕES DE USO:
+  • As informações abaixo foram extraídas de documentos fornecidos pela equipe (PDFs, Word, Excel, etc.)
+  • Use-as para identificar:
+    - Requisitos técnicos e funcionais específicos
+    - Padrões, convenções e decisões arquiteturais
+    - Histórico de problemas ou mudanças
+    - Especificações técnicas detalhadas
+    - Diagramas, tabelas ou dados estruturados convertidos em texto
+  • Ao criar tarefas baseadas nestas informações, mencione a fonte na descrição
+    Exemplo: ""Implementar autenticação OAuth conforme especificado no documento anexado""
+  • Priorize informações dos documentos quando conflitarem com dados do formulário
+  • Cite os documentos ao fundamentar riscos ou recomendações
+  • Identifique lacunas que os documentos não abordam
+
+OBSERVAÇÃO: Se esta seção estiver vazia, ignore-a completamente e base sua análise apenas nos dados estruturados acima.
+
+═══════════════════════════════════════════════════════════════════
 📤 FORMATO DE RESPOSTA OBRIGATÓRIO
 ═══════════════════════════════════════════════════════════════════
 
 Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicionais):
 
 {
-  ""overview"": ""Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Seja objetivo e direto (3-4 frases)."",
-  ""risks"": ""Riscos no formato: CRITICO: <lista separada por vírgula> | ALTO: <lista separada por vírgula> | MEDIO: <lista separada por vírgula> | BAIXO: <lista separada por vírgula>. Classifique cada risco (técnico, de equipe, de negócio, de cronograma) no nível adequado. Use cada nível apenas se houver riscos reais nele; omita os que não se aplicam. Seja específico e cite exemplos do contexto fornecido."",
-  ""recommendations"": ""Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático."",
+  ""overview"": ""Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Se documentos foram fornecidos, incorpore insights relevantes deles. Seja objetivo e direto (3-4 frases)."",
+  ""risks"": ""Riscos no formato: CRITICO: <lista separada por vírgula> | ALTO: <lista separada por vírgula> | MEDIO: <lista separada por vírgula> | BAIXO: <lista separada por vírgula>. Classifique cada risco (técnico, de equipe, de negócio, de cronograma) no nível adequado. Use cada nível apenas se houver riscos reais nele; omita os que não se aplicam. Considere informações dos documentos anexados se disponíveis. Seja específico e cite exemplos do contexto fornecido."",
+  ""recommendations"": ""Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Se documentos foram fornecidos, inclua recomendações baseadas em informações técnicas neles contidas. Seja estratégico e prático."",
   ""tasks"": [
     {
       ""name"": ""Nome da tarefa"",
-      ""description"": ""Descrição detalhada da tarefa (opcional)"",
+      ""description"": ""Descrição detalhada da tarefa (opcional). Se baseada em informações de documentos, mencione isso aqui."",
       ""priority"": ""Baixa|Média|Alta|Crítica"",
       ""suggestedResponsible"": ""Nome ou papel sugerido para responsável (opcional)"",
       ""deadlineInDays"": 7,
@@ -564,6 +587,7 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
   • Gere APENAS tarefas relevantes e acionáveis
   • Evite tarefas redundantes ou desnecessárias
   • Adapte a quantidade ao nível de detalhe solicitado ({DetailLevel})
+  • Se documentos técnicos foram fornecidos, crie tarefas baseadas em requisitos identificados neles
   • Foque em qualidade, não quantidade
 
 🎯 REGRAS DE PRIORIDADE (campo priority):
@@ -597,12 +621,14 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
   • Use nomes reais ou papéis específicos (ex: ""João Silva"", ""Desenvolvedor Backend"", ""QA Lead"")
   • Se não houver informação suficiente, sugira o papel mais adequado (ex: ""Desenvolvedor"", ""Product Owner"")
   • Considere a seniority e dedicação do membro ao sugerir
+  • Se documentos técnicos mencionarem especialidades necessárias, sugira papéis adequados
 
 🔗 COERÊNCIA COM ANÁLISE:
   • Cada tarefa DEVE estar ligada a pelo menos um risco identificado OU uma recomendação fornecida
   • Priorize tarefas que mitiguem riscos CRÍTICOS e ALTOS
   • Tarefas devem ser consequência direta da análise realizada
   • Evite gerar tarefas que não foram mencionadas ou justificadas na análise
+  • Se documentos foram fornecidos, crie tarefas que abordem requisitos ou problemas identificados neles
 
 ✅ BOAS PRÁTICAS OBRIGATÓRIAS:
   • Seja específico e prático nas descrições
@@ -610,7 +636,8 @@ Cada tarefa DEVE conter exatamente os seguintes campos:
   • No campo 'description', detalhe o contexto e objetivo da tarefa
   • Garanta que a tarefa seja mensurável e tenha critério de conclusão claro
   • Considere dependências entre tarefas ao definir a ordem
-  • Relacione tarefas com os riscos, dependências, integrações e restrições informadas"
+  • Relacione tarefas com os riscos, dependências, integrações e restrições informadas
+  • Quando baseado em documentos, cite a fonte na descrição (ex: 'Conforme especificação técnica anexada')"
             });
         });
 
