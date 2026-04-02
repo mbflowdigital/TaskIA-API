@@ -237,7 +237,10 @@ public class ClaudeService
         public decimal Order { get; set; }
     }
 
-    public async Task<Result<ProjectAnalysis>> AnalyzeProjectAsync(ProjectAnalysisInput data, CancellationToken cancellationToken = default)
+    public async Task<Result<ProjectAnalysis>> AnalyzeProjectAsync(
+        ProjectAnalysisInput data, 
+        string? additionalDocumentContext = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(data?.ProjectName))
             return Result<ProjectAnalysis>.Failure("O nome do projeto é obrigatório.");
@@ -246,7 +249,7 @@ public class ClaudeService
         if (promptBaseParam == null)
             return Result<ProjectAnalysis>.Failure("Prompt_Base não encontrado na tabela de parâmetros.");
 
-        var prompt = BuildAnalysisPrompt(promptBaseParam.Valor, data);
+        var prompt = BuildAnalysisPrompt(promptBaseParam.Valor, data, additionalDocumentContext);
 
         var requestBody = new
         {
@@ -376,7 +379,7 @@ public class ClaudeService
         }
     }
 
-    private static string BuildAnalysisPrompt(string template, ProjectAnalysisInput data)
+    private static string BuildAnalysisPrompt(string template, ProjectAnalysisInput data, string? additionalDocumentContext = null)
     {
         var endDateText = string.IsNullOrWhiteSpace(data.EndDate) ? "Não definida" : data.EndDate;
         var descriptionText = string.IsNullOrWhiteSpace(data.Description) ? "Não informada" : data.Description;
@@ -485,7 +488,16 @@ public class ClaudeService
             .Replace("{WhatWentWrong}", whatWentWrongText)
             .Replace("{DetailLevel}", detailText)
             .Replace("{ReviewFrequency}", reviewText)
-            .Replace("{FinalObservations}", observationsText);
+            .Replace("{FinalObservations}", observationsText)
+            + BuildAdditionalDocumentContext(additionalDocumentContext);
+    }
+
+    private static string BuildAdditionalDocumentContext(string? additionalDocumentContext)
+    {
+        if (string.IsNullOrWhiteSpace(additionalDocumentContext))
+            return string.Empty;
+
+        return $"\n\n## CONTEXTO ADICIONAL DE DOCUMENTOS\n\nOs seguintes documentos foram fornecidos para fornecer contexto adicional sobre o projeto:\n\n{additionalDocumentContext}\n\nConsidere essas informações ao gerar a análise, tarefas e recomendações.";
     }
 
     private static ProjectAnalysis ParseAnalysis(string text, string promptSent)
