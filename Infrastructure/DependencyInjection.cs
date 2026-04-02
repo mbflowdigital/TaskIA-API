@@ -1,3 +1,4 @@
+using Application.Core.Interfaces.Services;
 using Domain.Interfaces;
 using Infrastructure.Configuration;
 using Infrastructure.Data;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         // ✅ Registrar serviços de infraestrutura
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, PasswordHasherService>();
+        services.AddScoped<IDocumentExtractionService, DocumentExtractionService>();
 
         // Configurar JWT Authentication
         ConfigureJwtAuthentication(services, configuration);

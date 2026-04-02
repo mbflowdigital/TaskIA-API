@@ -21,6 +21,7 @@ public class ProjectDto
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public int TaskCount { get; set; }
     public List<ProjectMemberDto> Members { get; set; } = new();
     public ProjectDetailsDto? Details { get; set; }
     public ProjectExecutionSettingsDto? ExecutionSettings { get; set; }
