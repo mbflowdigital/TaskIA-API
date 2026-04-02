@@ -68,6 +68,9 @@ public class Project : BaseEntity
     // Relacionamento com ProjectSensitiveData (dados sensíveis tratados pelo projeto)
     public virtual ICollection<ProjectSensitiveData> SensitiveData { get; set; } = new List<ProjectSensitiveData>();
 
+    // Relacionamento com ProjectTasks (tarefas do projeto)
+    public virtual ICollection<Board> Tasks { get; set; } = new List<Board>();
+
     // Construtor p�blico
     public Project() { }
 

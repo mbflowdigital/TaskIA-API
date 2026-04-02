@@ -49,7 +49,12 @@ builder.Services.AddCrossCutting();
 builder.Services.AddHttpClient<IUserService, UserService>();
 
 // Registrar ClaudeService com HttpClient dedicado
-builder.Services.AddHttpClient<Infrastructure.Services.ClaudeService>();
+builder.Services.AddHttpClient<Infrastructure.Services.ClaudeService>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler())
+    .ConfigureHttpClient(client =>
+    {
+        client.Timeout = TimeSpan.FromMinutes(5); // 5 minutos para análises complexas com IA
+    });
 
 // Configurar Controllers
 builder.Services.AddControllers();

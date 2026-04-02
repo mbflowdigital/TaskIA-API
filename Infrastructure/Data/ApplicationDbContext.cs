@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProjectIntegrations> ProjectIntegrations { get; set; } = null!;
     public DbSet<ProjectSensitiveData> ProjectSensitiveData { get; set; } = null!;
     public DbSet<Parameter> Parameters { get; set; } = null!;
+    public DbSet<Board> Board { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -518,9 +519,171 @@ Responda SOMENTE no formato JSON abaixo (sem markdown, sem explicações adicion
 {
   ""overview"": ""Análise geral do projeto incluindo: viabilidade técnica e de negócio, pontos fortes da proposta, principais desafios identificados, adequação da equipe ao escopo, e uma avaliação crítica do cronograma proposto. Seja objetivo e direto (3-4 frases)."",
   ""risks"": ""Riscos no formato: CRITICO: <lista separada por vírgula> | ALTO: <lista separada por vírgula> | MEDIO: <lista separada por vírgula> | BAIXO: <lista separada por vírgula>. Classifique cada risco (técnico, de equipe, de negócio, de cronograma) no nível adequado. Use cada nível apenas se houver riscos reais nele; omita os que não se aplicam. Seja específico e cite exemplos do contexto fornecido."",
-  ""recommendations"": ""Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático.""
-}"
+  ""recommendations"": ""Forneça recomendações práticas e acionáveis separadas por ponto e vírgula. Inclua sugestões para: mitigação de riscos identificados, otimização da alocação da equipe, estratégias de gestão de dependências, melhorias no processo de aprovação, pontos de atenção no cronograma, e boas práticas baseadas nas experiências anteriores relatadas. Seja estratégico e prático."",
+  ""tasks"": [
+    {
+      ""name"": ""Nome da tarefa"",
+      ""description"": ""Descrição detalhada da tarefa (opcional)"",
+      ""priority"": ""Baixa|Média|Alta|Crítica"",
+      ""suggestedResponsible"": ""Nome ou papel sugerido para responsável (opcional)"",
+      ""deadlineInDays"": 7,
+      ""order"": 1000
+    },
+    {
+      ""name"": ""Segunda tarefa"",
+      ""description"": ""Outra descrição (opcional)"",
+      ""priority"": ""Alta"",
+      ""suggestedResponsible"": ""Desenvolvedor"",
+      ""deadlineInDays"": 14,
+      ""order"": 2000
+    }
+  ]
+}
+
+IMPORTANTE SOBRE AS TAREFAS:
+
+📋 ESTRUTURA OBRIGATÓRIA DO JSON:
+Cada tarefa DEVE conter exatamente os seguintes campos:
+  • name (string, obrigatório, máximo 200 caracteres)
+  • description (string, opcional, máximo 2000 caracteres)
+  • priority (string, obrigatório, valores aceitos: Baixa, Média, Alta, Crítica)
+  • suggestedResponsible (string, opcional, máximo 200 caracteres)
+  • deadlineInDays (number, obrigatório, número inteiro positivo)
+  • order (number, obrigatório, valor decimal para ordenação)
+
+🚫 PROIBIDO:
+  • Adicionar campos extras que não estão na estrutura acima
+  • Deixar campos obrigatórios vazios ou nulos
+  • Usar valores diferentes dos especificados para priority
+  • Quebrar a sintaxe JSON
+  • Gerar tarefas duplicadas ou redundantes
+  • Criar tarefas genéricas sem valor prático
+
+📊 QUANTIDADE DE TAREFAS:
+  • NÃO há limite mínimo ou máximo de tarefas
+  • Gere APENAS tarefas relevantes e acionáveis
+  • Evite tarefas redundantes ou desnecessárias
+  • Adapte a quantidade ao nível de detalhe solicitado ({DetailLevel})
+  • Foque em qualidade, não quantidade
+
+🎯 REGRAS DE PRIORIDADE (campo priority):
+  • Crítica → Tarefa que bloqueia o projeto, envolve compliance obrigatório, segurança crítica ou dependência externa urgente
+  • Alta → Tarefa que impacta diretamente o MVP, prazo final ou funcionalidade core do projeto
+  • Média → Tarefa relevante para o projeto, mas não bloqueia entregas principais
+  • Baixa → Melhoria incremental, otimização ou tarefa complementar
+
+⏰ REGRAS DE PRAZO (campo deadlineInDays):
+  • Deve ser coerente com o campo 'order' e cronograma do projeto
+  • Tarefas iniciais (order baixo) → prazos menores
+  • Tarefas finais (order alto) → prazos maiores
+  • Considere a dedicação da equipe informada
+  • Evite prazos idênticos sem justificativa técnica
+  • Garanta que o prazo seja realista considerando complexidade e prioridade
+  • Represente sempre o prazo em dias a partir do início do projeto
+
+🔢 REGRAS DE ORDENAÇÃO (campo order):
+  • Use valores decimais para garantir flexibilidade na reordenação
+  • SEMPRE iniciar em 1000 (número decimal)
+  • Incrementar de 1000 em 1000: 1000, 2000, 3000, 4000, etc.
+  • Este sistema permite inserir tarefas entre outras sem reorganizar tudo (ex: entre 1000 e 2000, pode inserir 1500)
+  • Seguir ordem lógica de execução e dependências
+  • Tarefas que são pré-requisitos devem vir primeiro (valores menores)
+  • Tarefas críticas devem ser priorizadas no início quando possível
+  • IMPORTANTE: O valor deve ser numérico (number), NÃO string
+
+👤 REGRAS DE RESPONSÁVEL (campo suggestedResponsible):
+  • Baseie-se SEMPRE nos papéis e membros da equipe informados
+  • PROIBIDO usar termos genéricos como ""Equipe"", ""Time"", ""Grupo""
+  • Use nomes reais ou papéis específicos (ex: ""João Silva"", ""Desenvolvedor Backend"", ""QA Lead"")
+  • Se não houver informação suficiente, sugira o papel mais adequado (ex: ""Desenvolvedor"", ""Product Owner"")
+  • Considere a seniority e dedicação do membro ao sugerir
+
+🔗 COERÊNCIA COM ANÁLISE:
+  • Cada tarefa DEVE estar ligada a pelo menos um risco identificado OU uma recomendação fornecida
+  • Priorize tarefas que mitiguem riscos CRÍTICOS e ALTOS
+  • Tarefas devem ser consequência direta da análise realizada
+  • Evite gerar tarefas que não foram mencionadas ou justificadas na análise
+
+✅ BOAS PRÁTICAS OBRIGATÓRIAS:
+  • Seja específico e prático nas descrições
+  • Use verbos de ação no campo 'name' (ex: ""Implementar"", ""Configurar"", ""Validar"")
+  • No campo 'description', detalhe o contexto e objetivo da tarefa
+  • Garanta que a tarefa seja mensurável e tenha critério de conclusão claro
+  • Considere dependências entre tarefas ao definir a ordem
+  • Relacione tarefas com os riscos, dependências, integrações e restrições informadas"
             });
+        });
+
+        // ========================================================================
+        // Configuração de BoardTask (tarefas do projeto)
+        // ========================================================================
+        modelBuilder.Entity<Board>(entity =>
+        {
+            entity.ToTable("BoardTask");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.ProjectId)
+                .IsRequired();
+
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(2000);
+
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("A Fazer");
+
+            entity.Property(e => e.Priority)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasDefaultValue("Média");
+
+            entity.Property(e => e.PrazoEmDias)
+                .IsRequired();
+
+            entity.Property(e => e.OrdemNoBoard)
+                .HasMaxLength(50);
+
+            // Relacionamento com Project
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.Tasks)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relacionamento com User (Responsável)
+            entity.HasOne(e => e.Responsavel)
+                .WithMany()
+                .HasForeignKey(e => e.ResponsavelId)
+                .OnDelete(DeleteBehavior.Restrict); // Restrict para evitar múltiplos caminhos de cascata
+
+            // Relacionamento com User (Sugestão de Responsável)
+            entity.HasOne(e => e.SugestaoResponsavel)
+                .WithMany()
+                .HasForeignKey(e => e.SugestaoResponsavelId)
+                .OnDelete(DeleteBehavior.Restrict); // Restrict para evitar múltiplos caminhos de cascata
+
+            // Índices para performance
+            entity.HasIndex(e => e.ProjectId)
+                .HasDatabaseName("IX_BoardTask_ProjectId");
+            entity.HasIndex(e => e.Status)
+                .HasDatabaseName("IX_BoardTask_Status");
+
+            entity.HasIndex(e => e.Priority)
+                .HasDatabaseName("IX_BoardTask_Priority");
+
+            entity.HasIndex(e => e.ResponsavelId)
+                .HasDatabaseName("IX_BoardTask_ResponsavelId");
+
+            entity.HasIndex(e => e.SugestaoResponsavelId)
+                .HasDatabaseName("IX_BoardTask_SugestaoResponsavelId");
+
+            entity.HasIndex(e => new { e.ProjectId, e.OrdemNoBoard })
+                .HasDatabaseName("IX_BoardTask_ProjectId_OrdemNoBoard");
         });
     }
 }
