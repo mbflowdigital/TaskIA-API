@@ -366,6 +366,7 @@ public class ProjectService : IProjectService
             IsActive = project.IsActive,
             CreatedAt = project.CreatedAt,
             UpdatedAt = project.UpdatedAt,
+            TaskCount = project.Tasks?.Count ?? 0,
             Members = project.ProjectMembers?
                 .Where(m => m.IsActive)
                 .Select(m => new ProjectMemberDto
