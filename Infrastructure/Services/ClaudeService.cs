@@ -6,6 +6,7 @@ using Domain.Common;
 using Domain.Interfaces;
 using Infrastructure.Data;
 using Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services;
@@ -13,6 +14,8 @@ namespace Infrastructure.Services;
 public record ProjectSuggestion(string Description, string Objective);
 public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
 public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion>? Tasks, string PromptSent);
+public record GenerateTasksInput(Guid ProjectId);
+public record TasksGenerationResult(List<TaskSuggestion> Tasks, int TasksCreated, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
@@ -703,5 +706,271 @@ public class ClaudeService
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Gera tarefas para um projeto baseado na análise previamente salva
+    /// </summary>
+    public async Task<Result<TasksGenerationResult>> GenerateProjectTasksAsync(
+        GenerateTasksInput input,
+        CancellationToken cancellationToken = default)
+    {
+        // 1. Buscar projeto
+        var project = await _projectRepository.GetByIdAsync(input.ProjectId, cancellationToken);
+        if (project == null)
+            return Result<TasksGenerationResult>.Failure("Projeto não encontrado.");
+
+        // 2. Validar status
+        if (project.Status != "Waiting_Approve")
+            return Result<TasksGenerationResult>.Failure($"Projeto deve estar com status 'Waiting_Approve'. Status atual: '{project.Status}'");
+
+        // 3. Validar se análise existe
+        if (string.IsNullOrWhiteSpace(project.IA_Overview) || 
+            string.IsNullOrWhiteSpace(project.IA_Risks) || 
+            string.IsNullOrWhiteSpace(project.IA_Recommendations))
+            return Result<TasksGenerationResult>.Failure("Análise da IA não encontrada. Execute a análise primeiro.");
+
+        // 4. Buscar dados do projeto com relacionamentos
+        var projectDetails = await _context.Projects
+            .Include(p => p.ProjectMembers)
+                .ThenInclude(pm => pm.User)
+            .Include(p => p.ProjectDetails)
+            .Include(p => p.ExecutionSettings)
+            .FirstOrDefaultAsync(p => p.Id == input.ProjectId, cancellationToken);
+
+        if (projectDetails == null)
+            return Result<TasksGenerationResult>.Failure("Detalhes do projeto não encontrados.");
+
+        // 5. Buscar prompt template
+        var promptTaskParam = await _parameterRepository.GetByNomeAsync("Prompt_Task", cancellationToken);
+        if (promptTaskParam == null)
+            return Result<TasksGenerationResult>.Failure("Prompt_Task não encontrado na tabela de parâmetros.");
+
+        // 6. Montar prompt substituindo placeholders
+        var prompt = BuildTasksPrompt(promptTaskParam.Valor, projectDetails);
+
+        Console.WriteLine($"[INFO] ========================================");
+        Console.WriteLine($"[INFO] Gerando tarefas para projeto '{project.Name}'...");
+        Console.WriteLine($"[INFO] Tamanho do prompt: {prompt.Length} caracteres");
+        Console.WriteLine($"[INFO] ========================================");
+
+        // 7. Chamar Claude API
+        var requestBody = new
+        {
+            model = _model,
+            max_tokens = 8192,
+            messages = new[]
+            {
+                new { role = "user", content = prompt }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/messages");
+        request.Headers.Add("x-api-key", _apiKey);
+        request.Headers.Add("anthropic-version", "2023-06-01");
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(requestBody),
+            Encoding.UTF8,
+            "application/json"
+        );
+
+        HttpResponseMessage response;
+        try
+        {
+            Console.WriteLine($"[INFO] Enviando requisição para Claude API: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+            var startTime = DateTime.Now;
+            response = await _httpClient.SendAsync(request, cancellationToken);
+            var elapsed = (DateTime.Now - startTime).TotalSeconds;
+            Console.WriteLine($"[SUCCESS] ✓ Resposta recebida em {elapsed:F2} segundos");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] ✗ Erro ao comunicar com Claude: {ex.Message}");
+            return Result<TasksGenerationResult>.Failure($"Erro ao comunicar com Claude: {ex.Message}");
+        }
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            return Result<TasksGenerationResult>.Failure($"Claude API retornou erro {(int)response.StatusCode}.");
+
+        try
+        {
+            var claudeResponse = JsonSerializer.Deserialize<ClaudeApiResponse>(responseContent, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+
+            // 8. Parsear resposta (array de tarefas)
+            var tasks = ParseTasksArray(text);
+
+            if (tasks.Count == 0)
+                return Result<TasksGenerationResult>.Failure("Nenhuma tarefa foi gerada pela IA.");
+
+            // 9. Criar tarefas no Board
+            var boards = new List<Domain.Entities.Board>();
+            var teamMembers = projectDetails.ProjectMembers.ToList();
+
+            foreach (var task in tasks)
+            {
+                // Buscar usuário sugerido
+                Guid? sugestaoResponsavelId = null;
+                if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
+                {
+                    var teamMember = teamMembers.FirstOrDefault(m => 
+                        m.User != null && m.User.Name.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
+
+                    if (teamMember != null)
+                    {
+                        sugestaoResponsavelId = teamMember.UserId;
+                        Console.WriteLine($"[DEBUG] Usuário sugerido '{task.SuggestedResponsible}' encontrado: {teamMember.UserId}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[WARNING] Usuário sugerido '{task.SuggestedResponsible}' não encontrado para tarefa '{task.Name}'");
+                    }
+                }
+
+                var board = new Domain.Entities.Board(
+                    projectId: project.Id,
+                    name: task.Name,
+                    description: task.Description,
+                    status: "A Fazer",
+                    priority: task.Priority,
+                    sugestaoResponsavelId: sugestaoResponsavelId,
+                    prazoEmDias: task.DeadlineInDays,
+                    ordemNoBoard: task.Order
+                );
+
+                // Atribuir criador do projeto como responsável inicial
+                board.AssignResponsavel(project.UserId);
+                boards.Add(board);
+            }
+
+            await _boardRepository.AddRangeAsync(boards, cancellationToken);
+
+            // 10. Mudar status do projeto para Active
+            project.UpdateStatus("Active");
+            await _projectRepository.UpdateAsync(project, cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            Console.WriteLine($"[SUCCESS] ✓ {boards.Count} tarefas criadas e projeto ativado!");
+
+            var result = new TasksGenerationResult(tasks, boards.Count, prompt);
+            return Result<TasksGenerationResult>.Success(result, $"{boards.Count} tarefas criadas com sucesso. Projeto ativado.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Erro ao processar tarefas: {ex.Message}");
+            return Result<TasksGenerationResult>.Failure($"Erro ao processar tarefas: {ex.Message}");
+        }
+    }
+
+    private static string BuildTasksPrompt(string template, Domain.Entities.Project project)
+    {
+        var startDate = project.StartDate?.ToString("dd/MM/yyyy") ?? "Não definida";
+        var endDate = project.EndDate?.ToString("dd/MM/yyyy") ?? "Não definida";
+
+        var totalDays = 0;
+        if (project.StartDate.HasValue && project.EndDate.HasValue)
+        {
+            totalDays = (project.EndDate.Value - project.StartDate.Value).Days;
+        }
+
+        var teamMembersSummary = project.ProjectMembers.Any()
+            ? string.Join("\n", project.ProjectMembers
+                .Where(m => m.User != null)
+                .Select(m => $"{m.User!.Name} - {m.ProjectFunction ?? "Sem papel definido"} - {m.Dedication ?? "Dedicação não informada"}"))
+            : "Nenhum membro definido";
+
+        var detailLevel = project.ExecutionSettings?.NivelDetalhePlano.ToString() ?? "Balanceado";
+
+        // Separar riscos por criticidade (simplificado - o prompt já vem formatado)
+        var risks = project.IA_Risks ?? "Nenhum risco identificado";
+
+        // Parse simples de riscos (assumindo formato com emojis)
+        var criticalRisks = ExtractRisksByLevel(risks, "🔴", "🟠");
+        var highRisks = ExtractRisksByLevel(risks, "🟠", "🟡");
+        var mediumRisks = ExtractRisksByLevel(risks, "🟡", "🟢");
+        var lowRisks = ExtractRisksByLevel(risks, "🟢", null);
+
+        return template
+            .Replace("{ProjectName}", project.Name)
+            .Replace("{StartDate}", startDate)
+            .Replace("{EndDate}", endDate)
+            .Replace("{TotalDays}", totalDays.ToString())
+            .Replace("{DetailLevel}", detailLevel)
+            .Replace("{TeamMembersSummary}", teamMembersSummary)
+            .Replace("{Overview}", project.IA_Overview ?? "")
+            .Replace("{CriticalRisks}", criticalRisks)
+            .Replace("{HighRisks}", highRisks)
+            .Replace("{MediumRisks}", mediumRisks)
+            .Replace("{LowRisks}", lowRisks)
+            .Replace("{Recommendations}", project.IA_Recommendations ?? "");
+    }
+
+    private static string ExtractRisksByLevel(string allRisks, string startEmoji, string? endEmoji)
+    {
+        var startIndex = allRisks.IndexOf(startEmoji);
+        if (startIndex == -1) return "Nenhum";
+
+        var endIndex = endEmoji != null ? allRisks.IndexOf(endEmoji, startIndex + 1) : allRisks.Length;
+        if (endIndex == -1) endIndex = allRisks.Length;
+
+        var section = allRisks.Substring(startIndex, endIndex - startIndex).Trim();
+        return string.IsNullOrWhiteSpace(section) ? "Nenhum" : section;
+    }
+
+    private static List<TaskSuggestion> ParseTasksArray(string text)
+    {
+        text = text.Trim();
+
+        Console.WriteLine("[DEBUG] ParseTasksArray - Texto original:");
+        Console.WriteLine(text.Length > 500 ? text.Substring(0, 500) + "..." : text);
+
+        // Remover markdown se existir
+        if (text.StartsWith("```"))
+        {
+            var start = text.IndexOf('[');
+            var end = text.LastIndexOf(']');
+            if (start >= 0 && end > start)
+            {
+                text = text[start..(end + 1)];
+            }
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(text, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (parsed == null || parsed.Count == 0)
+            {
+                Console.WriteLine("[WARNING] Array de tarefas vazio ou nulo");
+                return new List<TaskSuggestion>();
+            }
+
+            var tasks = parsed.Select(t => new TaskSuggestion(
+                t.Name ?? "Tarefa sem nome",
+                t.Description,
+                t.Priority ?? "Média",
+                t.SuggestedResponsible,
+                t.DeadlineInDays,
+                t.Order
+            )).ToList();
+
+            Console.WriteLine($"[SUCCESS] ✓ {tasks.Count} tarefas parseadas com sucesso");
+            return tasks;
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[ERROR] Erro ao parsear array de tarefas: {ex.Message}");
+            return new List<TaskSuggestion>();
+        }
     }
 }
