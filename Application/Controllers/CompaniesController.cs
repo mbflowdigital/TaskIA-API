@@ -2,7 +2,10 @@ using Application.Core.DTOs.Companies;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Enums;
+using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Application.Controllers;
@@ -13,20 +16,51 @@ namespace Application.Controllers;
 /// ADM_MASTER não pertence a empresa.
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class CompaniesController : ControllerBase
 {
     private readonly ICompanyService _companyService;
+    private readonly ApplicationDbContext _context;
 
-    public CompaniesController(ICompanyService companyService)
+    public CompaniesController(ICompanyService companyService, ApplicationDbContext context)
     {
         _companyService = companyService;
+        _context = context;
     }
 
     /// <summary>
-    /// Cria uma nova empresa. Requer role ADM (quando JWT ativo).
+    /// Lista todas as empresas ativas. Requer ADM_MASTER.
     /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(Result<IEnumerable<CompanyDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    {
+        if (TryGetRole(out var role) && role != UserRole.ADM_MASTER)
+            return StatusCode(StatusCodes.Status403Forbidden,
+                Result.Failure("Apenas ADM_MASTER pode listar todas as empresas."));
+
+        var companies = await _context.Companies
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.Name)
+            .Select(c => new CompanyDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Address = c.Address,
+                NumberOfMembers = c.NumberOfMembers,
+                Category = c.Category,
+                IsActive = c.IsActive,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt,
+                UserCount = c.Users.Count(u => u.IsActive)
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(Result<IEnumerable<CompanyDto>>.Success(companies, $"{companies.Count} empresa(s) encontrada(s)."));
+    }
     [HttpPost]
     [ProducesResponseType(typeof(Result<CompanyDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]

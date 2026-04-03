@@ -35,7 +35,7 @@ public class User : BaseEntity
     [Required]
     public int RoleId { get; set; }
 
-    public int PositionId { get; set; }
+    public int? PositionId { get; set; }
 
     public bool IsEmailVerified { get; set; }
 
