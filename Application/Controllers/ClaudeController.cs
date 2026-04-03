@@ -9,6 +9,8 @@ namespace Application.Controllers;
 public record SuggestProjectRequest(string ProjectName);
 public record ProjectSuggestionResponse(string Description, string Objective);
 public record ProjectAnalysisResponse(string Overview, string Risks, string Recommendations, string PromptSent);
+public record AnalyzeProjectJobDto(string JobId);
+public record AnalyzeProjectStatusDto(string Status, ProjectAnalysisResponse? Result, string? ErrorMessage);
 public record GenerateTasksRequest(Guid ProjectId);
 public record GenerateTasksJobDto(string JobId);
 public record GenerateTasksStatusDto(string Status, int TasksCreated, string? ErrorMessage);
@@ -68,29 +70,74 @@ public class ClaudeController : ControllerBase
     }
 
     /// <summary>
-    /// Analisa um projeto com base em todos os dados preenchidos e gera insights via Claude Sonnet
+    /// Inicia a análise do projeto em background e retorna um jobId para polling.
     /// </summary>
     [HttpPost("analyze-project")]
-    [ProducesResponseType(typeof(Result<ProjectAnalysisResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result<AnalyzeProjectJobDto>), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AnalyzeProject(
-        [FromBody] ProjectAnalysisInput request,
-        CancellationToken cancellationToken)
+    public IActionResult AnalyzeProject([FromBody] ProjectAnalysisInput request)
     {
         if (string.IsNullOrWhiteSpace(request?.ProjectName))
             return BadRequest(Result.Failure("O nome do projeto é obrigatório."));
 
-        var result = await _claudeService.AnalyzeProjectAsync(request, null, cancellationToken);
+        var jobId = _jobStore.CreateJob();
 
-        if (!result.IsSuccess)
-            return BadRequest(Result.Failure(result.Message));
+        _ = Task.Run(async () =>
+        {
+            _jobStore.SetRunning(jobId);
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var claudeService = scope.ServiceProvider.GetRequiredService<ClaudeService>();
 
-        var response = Result<ProjectAnalysisResponse>.Success(
-            new ProjectAnalysisResponse(result.Data!.Overview, result.Data.Risks, result.Data.Recommendations, result.Data.PromptSent),
-            result.Message
-        );
+                var result = await claudeService.AnalyzeProjectAsync(request, null);
 
-        return Ok(response);
+                if (result.IsSuccess && result.Data != null)
+                {
+                    var payload = System.Text.Json.JsonSerializer.Serialize(
+                        new ProjectAnalysisResponse(
+                            result.Data.Overview,
+                            result.Data.Risks,
+                            result.Data.Recommendations,
+                            result.Data.PromptSent));
+                    _jobStore.SetCompletedWithPayload(jobId, payload);
+                }
+                else
+                {
+                    _jobStore.SetFailed(jobId, result.Message);
+                }
+            }
+            catch (Exception ex)
+            {
+                _jobStore.SetFailed(jobId, $"Erro inesperado: {ex.Message}");
+            }
+        });
+
+        return Accepted(Result<AnalyzeProjectJobDto>.Success(new AnalyzeProjectJobDto(jobId), "Job iniciado."));
+    }
+
+    /// <summary>
+    /// Retorna o status de um job de análise de projeto.
+    /// </summary>
+    [HttpGet("analyze-project/{jobId}/status")]
+    [ProducesResponseType(typeof(Result<AnalyzeProjectStatusDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public IActionResult GetAnalyzeProjectStatus(string jobId)
+    {
+        var job = _jobStore.Get(jobId);
+        if (job == null)
+            return NotFound(Result.Failure("Job não encontrado."));
+
+        ProjectAnalysisResponse? analysisResult = null;
+        if (job.Status == TaskJobStatus.Completed && job.ResultPayload != null)
+        {
+            analysisResult = System.Text.Json.JsonSerializer.Deserialize<ProjectAnalysisResponse>(
+                job.ResultPayload,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
+        var dto = new AnalyzeProjectStatusDto(job.Status.ToString(), analysisResult, job.ErrorMessage);
+        return Ok(Result<AnalyzeProjectStatusDto>.Success(dto));
     }
 
     /// <summary>
