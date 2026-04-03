@@ -62,6 +62,9 @@ builder.Services.AddHttpClient<Infrastructure.Services.ClaudeService>()
     })
     .SetHandlerLifetime(TimeSpan.FromMinutes(15));
 
+// Singleton para rastrear jobs assíncronos de geração de tarefas
+builder.Services.AddSingleton<Infrastructure.Services.TaskJobStore>();
+
 // Configurar Controllers
 builder.Services.AddControllers();
 

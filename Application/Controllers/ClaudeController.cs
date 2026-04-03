@@ -10,6 +10,8 @@ public record SuggestProjectRequest(string ProjectName);
 public record ProjectSuggestionResponse(string Description, string Objective);
 public record ProjectAnalysisResponse(string Overview, string Risks, string Recommendations, string PromptSent);
 public record GenerateTasksRequest(Guid ProjectId);
+public record GenerateTasksJobDto(string JobId);
+public record GenerateTasksStatusDto(string Status, int TasksCreated, string? ErrorMessage);
 public record TaskDto(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
 public record GenerateTasksResponse(List<TaskDto> Tasks, int TasksCreated, string PromptSent);
 
@@ -24,13 +26,19 @@ public class ClaudeController : ControllerBase
 {
     private readonly ClaudeService _claudeService;
     private readonly IDocumentExtractionService _documentExtractionService;
+    private readonly TaskJobStore _jobStore;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public ClaudeController(
         ClaudeService claudeService,
-        IDocumentExtractionService documentExtractionService)
+        IDocumentExtractionService documentExtractionService,
+        TaskJobStore jobStore,
+        IServiceScopeFactory scopeFactory)
     {
         _claudeService = claudeService;
         _documentExtractionService = documentExtractionService;
+        _jobStore = jobStore;
+        _scopeFactory = scopeFactory;
     }
 
     /// <summary>
@@ -86,39 +94,63 @@ public class ClaudeController : ControllerBase
     }
 
     /// <summary>
-    /// Gera tarefas para um projeto baseado na análise previamente aprovada
+    /// Inicia a geração de tarefas em background e retorna um jobId para polling.
     /// </summary>
     [HttpPost("generate-tasks")]
-    [ProducesResponseType(typeof(Result<GenerateTasksResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result<GenerateTasksJobDto>), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GenerateTasks(
-        [FromBody] GenerateTasksRequest request,
-        CancellationToken cancellationToken)
+    public IActionResult GenerateTasks([FromBody] GenerateTasksRequest request)
     {
         if (request == null || request.ProjectId == Guid.Empty)
             return BadRequest(Result.Failure("O ID do projeto é obrigatório."));
 
-        var input = new GenerateTasksInput(request.ProjectId);
-        var result = await _claudeService.GenerateProjectTasksAsync(input, cancellationToken);
+        var jobId = _jobStore.CreateJob();
 
-        if (!result.IsSuccess)
-            return BadRequest(Result.Failure(result.Message));
+        // Executa em background sem bloquear a resposta HTTP
+        _ = Task.Run(async () =>
+        {
+            _jobStore.SetRunning(jobId);
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var claudeService = scope.ServiceProvider.GetRequiredService<ClaudeService>();
 
-        var tasks = result.Data!.Tasks.Select(t => new TaskDto(
-            t.Name,
-            t.Description,
-            t.Priority,
-            t.SuggestedResponsible,
-            t.DeadlineInDays,
-            t.Order
-        )).ToList();
+                var input = new GenerateTasksInput(request.ProjectId);
+                var result = await claudeService.GenerateProjectTasksAsync(input);
 
-        var response = Result<GenerateTasksResponse>.Success(
-            new GenerateTasksResponse(tasks, result.Data.TasksCreated, result.Data.PromptSent),
-            result.Message
+                if (result.IsSuccess)
+                    _jobStore.SetCompleted(jobId, result.Data!.TasksCreated);
+                else
+                    _jobStore.SetFailed(jobId, result.Message);
+            }
+            catch (Exception ex)
+            {
+                _jobStore.SetFailed(jobId, $"Erro inesperado: {ex.Message}");
+            }
+        });
+
+        return Accepted(Result<GenerateTasksJobDto>.Success(new GenerateTasksJobDto(jobId), "Job iniciado."));
+    }
+
+    /// <summary>
+    /// Retorna o status de um job de geração de tarefas.
+    /// </summary>
+    [HttpGet("generate-tasks/{jobId}/status")]
+    [ProducesResponseType(typeof(Result<GenerateTasksStatusDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public IActionResult GetGenerateTasksStatus(string jobId)
+    {
+        var job = _jobStore.Get(jobId);
+        if (job == null)
+            return NotFound(Result.Failure("Job não encontrado."));
+
+        var dto = new GenerateTasksStatusDto(
+            job.Status.ToString(),
+            job.TasksCreated,
+            job.ErrorMessage
         );
 
-        return Ok(response);
+        return Ok(Result<GenerateTasksStatusDto>.Success(dto));
     }
 
 }
