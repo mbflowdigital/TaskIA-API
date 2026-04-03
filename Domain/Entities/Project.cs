@@ -34,6 +34,13 @@ public class Project : BaseEntity
 
     public string? Prompt_enviado { get; set; }
 
+    // Campos para armazenar análise da IA
+    public string? IA_Overview { get; set; }
+
+    public string? IA_Risks { get; set; }
+
+    public string? IA_Recommendations { get; set; }
+
     // Relacionamento com User
     [Required]
     public Guid UserId { get; set; }
@@ -125,7 +132,7 @@ public class Project : BaseEntity
     /// </summary>
     private static bool IsValidStatus(string status)
     {
-        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Inactive" };
+        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Waiting_Approve" };
         return validStatuses.Contains(status);
     }
 
@@ -135,6 +142,17 @@ public class Project : BaseEntity
     public void SoftDelete()
     {
         Deactivate();
+        SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Atualiza os resultados da análise da IA
+    /// </summary>
+    public void UpdateAnalysisResults(string? overview, string? risks, string? recommendations)
+    {
+        IA_Overview = overview;
+        IA_Risks = risks;
+        IA_Recommendations = recommendations;
         SetUpdatedAt();
     }
 

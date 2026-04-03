@@ -310,7 +310,11 @@ public static class ProjectDetailsDtoExtensions
                         PriorityType = r.PriorityType.ToString()
                     })
                     .ToList()
-            }
+            },
+
+            IaOverview = project.IA_Overview,
+            IaRisks = project.IA_Risks,
+            IaRecommendations = project.IA_Recommendations
         };
     }
 }

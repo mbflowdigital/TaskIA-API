@@ -6,13 +6,16 @@ using Domain.Common;
 using Domain.Interfaces;
 using Infrastructure.Data;
 using Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
 public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
-public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion> Tasks, string PromptSent);
+public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion>? Tasks, string PromptSent);
+public record GenerateTasksInput(Guid ProjectId);
+public record TasksGenerationResult(List<TaskSuggestion> Tasks, int TasksCreated, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
@@ -347,62 +350,30 @@ public class ClaudeService
 
             if (project != null)
             {
+                // Atualizar prompt enviado
                 project.UpdatePromptEnviado(prompt);
+
+                // Salvar resultados da análise da IA
+                project.UpdateAnalysisResults(
+                    analysis.Overview,
+                    analysis.Risks,
+                    analysis.Recommendations
+                );
+
+                // Mudar status para "Pendente Aprovação"
+                project.UpdateStatus("Waiting_Approve");
+
                 await _projectRepository.UpdateAsync(project, cancellationToken);
-
-                // Criar as tarefas no Board baseado nas sugestões da IA
-                if (analysis.Tasks != null && analysis.Tasks.Count > 0)
-                {
-                    var boards = new List<Domain.Entities.Board>();
-
-                    foreach (var task in analysis.Tasks)
-                    {
-                        // Buscar usuário sugerido pelo nome na lista de membros da equipe
-                        Guid? sugestaoResponsavelId = null;
-                        if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
-                        {
-                            var teamMember = data.TeamMembers?.FirstOrDefault(m => 
-                                m.UserName.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
-
-                            if (teamMember != null && Guid.TryParse(teamMember.UserId, out var userId))
-                            {
-                                sugestaoResponsavelId = userId;
-                                Console.WriteLine($"[DEBUG] Usuário sugerido '{task.SuggestedResponsible}' encontrado: {userId}");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"[WARNING] Usuário sugerido '{task.SuggestedResponsible}' não encontrado nos membros da equipe para a tarefa '{task.Name}'");
-                            }
-                        }
-
-                        var board = new Domain.Entities.Board(
-                            projectId: project.Id,
-                            name: task.Name,
-                            description: task.Description,
-                            status: "A Fazer",
-                            priority: task.Priority,
-                            sugestaoResponsavelId: sugestaoResponsavelId,
-                            prazoEmDias: task.DeadlineInDays,
-                            ordemNoBoard: task.Order
-                        );
-
-                        // Atribuir o criador do projeto como responsável inicial da tarefa
-                        board.AssignResponsavel(project.UserId);
-                        boards.Add(board);
-                    }
-
-                    await _boardRepository.AddRangeAsync(boards, cancellationToken);
-                    Console.WriteLine($"[DEBUG] {boards.Count} tarefas criadas no Board para o projeto {project.Name} (Responsável: {project.UserId})");
-                }
-
                 await _context.SaveChangesAsync(cancellationToken);
+
+                Console.WriteLine($"[SUCCESS] ✓ Análise salva e projeto '{project.Name}' marcado como 'Pendente Aprovação'");
             }
             else
             {
                 Console.WriteLine($"[DEBUG] ATENÇÃO: Projeto '{data.ProjectName}' NÃO foi encontrado!");
             }
 
-            return Result<ProjectAnalysis>.Success(analysis, $"Análise gerada com sucesso. {analysis.Tasks?.Count ?? 0} tarefas criadas.");
+            return Result<ProjectAnalysis>.Success(analysis, "Análise gerada com sucesso. Aguardando aprovação do usuário para gerar tarefas.");
         }
         catch (Exception ex)
         {
@@ -735,5 +706,334 @@ public class ClaudeService
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Gera tarefas para um projeto baseado na análise previamente salva
+    /// </summary>
+    public async Task<Result<TasksGenerationResult>> GenerateProjectTasksAsync(
+        GenerateTasksInput input,
+        CancellationToken cancellationToken = default)
+    {
+        // 1. Buscar projeto
+        var project = await _projectRepository.GetByIdAsync(input.ProjectId, cancellationToken);
+        if (project == null)
+            return Result<TasksGenerationResult>.Failure("Projeto não encontrado.");
+
+        // 2. Validar status
+        if (project.Status != "Waiting_Approve")
+            return Result<TasksGenerationResult>.Failure($"Projeto deve estar com status 'Waiting_Approve'. Status atual: '{project.Status}'");
+
+        // 3. Validar se análise existe
+        if (string.IsNullOrWhiteSpace(project.IA_Overview) || 
+            string.IsNullOrWhiteSpace(project.IA_Risks) || 
+            string.IsNullOrWhiteSpace(project.IA_Recommendations))
+            return Result<TasksGenerationResult>.Failure("Análise da IA não encontrada. Execute a análise primeiro.");
+
+        // 4. Buscar dados do projeto com relacionamentos
+        var projectDetails = await _context.Projects
+            .Include(p => p.ProjectMembers)
+                .ThenInclude(pm => pm.User)
+            .Include(p => p.ProjectDetails)
+            .Include(p => p.ExecutionSettings)
+            .FirstOrDefaultAsync(p => p.Id == input.ProjectId, cancellationToken);
+
+        if (projectDetails == null)
+            return Result<TasksGenerationResult>.Failure("Detalhes do projeto não encontrados.");
+
+        // 5. Buscar prompt template
+        var promptTaskParam = await _parameterRepository.GetByNomeAsync("Prompt_Task", cancellationToken);
+        if (promptTaskParam == null)
+            return Result<TasksGenerationResult>.Failure("Prompt_Task não encontrado na tabela de parâmetros.");
+
+        // 6. Montar prompt substituindo placeholders
+        var prompt = BuildTasksPrompt(promptTaskParam.Valor, projectDetails);
+
+        Console.WriteLine($"[INFO] ========================================");
+        Console.WriteLine($"[INFO] Gerando tarefas para projeto '{project.Name}'...");
+        Console.WriteLine($"[INFO] Tamanho do prompt: {prompt.Length} caracteres");
+        Console.WriteLine($"[INFO] ========================================");
+
+        // 7. Chamar Claude API
+        var requestBody = new
+        {
+            model = _model,
+            max_tokens = 16000,
+            messages = new[]
+            {
+                new { role = "user", content = prompt }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/messages");
+        request.Headers.Add("x-api-key", _apiKey);
+        request.Headers.Add("anthropic-version", "2023-06-01");
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(requestBody),
+            Encoding.UTF8,
+            "application/json"
+        );
+
+        HttpResponseMessage response;
+        try
+        {
+            Console.WriteLine($"[INFO] Enviando requisição para Claude API: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+            var startTime = DateTime.Now;
+            response = await _httpClient.SendAsync(request, cancellationToken);
+            var elapsed = (DateTime.Now - startTime).TotalSeconds;
+            Console.WriteLine($"[SUCCESS] ✓ Resposta recebida em {elapsed:F2} segundos");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] ✗ Erro ao comunicar com Claude: {ex.Message}");
+            return Result<TasksGenerationResult>.Failure($"Erro ao comunicar com Claude: {ex.Message}");
+        }
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+            return Result<TasksGenerationResult>.Failure($"Claude API retornou erro {(int)response.StatusCode}.");
+
+        try
+        {
+            var claudeResponse = JsonSerializer.Deserialize<ClaudeApiResponse>(responseContent, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
+
+            // 8. Parsear resposta (array de tarefas)
+            var tasks = ParseTasksArray(text);
+
+            if (tasks.Count == 0)
+                return Result<TasksGenerationResult>.Failure("Nenhuma tarefa foi gerada pela IA.");
+
+            // 9. Criar tarefas no Board
+            var boards = new List<Domain.Entities.Board>();
+            var teamMembers = projectDetails.ProjectMembers.ToList();
+
+            foreach (var task in tasks)
+            {
+                // Buscar usuário sugerido
+                Guid? sugestaoResponsavelId = null;
+                if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
+                {
+                    var teamMember = teamMembers.FirstOrDefault(m => 
+                        m.User != null && m.User.Name.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
+
+                    if (teamMember != null)
+                    {
+                        sugestaoResponsavelId = teamMember.UserId;
+                        Console.WriteLine($"[DEBUG] Usuário sugerido '{task.SuggestedResponsible}' encontrado: {teamMember.UserId}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[WARNING] Usuário sugerido '{task.SuggestedResponsible}' não encontrado para tarefa '{task.Name}'");
+                    }
+                }
+
+                var board = new Domain.Entities.Board(
+                    projectId: project.Id,
+                    name: task.Name,
+                    description: task.Description,
+                    status: "A Fazer",
+                    priority: task.Priority,
+                    sugestaoResponsavelId: sugestaoResponsavelId,
+                    prazoEmDias: task.DeadlineInDays,
+                    ordemNoBoard: task.Order
+                );
+
+                // Atribuir criador do projeto como responsável inicial
+                board.AssignResponsavel(project.UserId);
+                boards.Add(board);
+            }
+
+            await _boardRepository.AddRangeAsync(boards, cancellationToken);
+
+            // 10. Mudar status do projeto para Active
+            project.UpdateStatus("Active");
+            await _projectRepository.UpdateAsync(project, cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            Console.WriteLine($"[SUCCESS] ✓ {boards.Count} tarefas criadas e projeto ativado!");
+
+            var result = new TasksGenerationResult(tasks, boards.Count, prompt);
+            return Result<TasksGenerationResult>.Success(result, $"{boards.Count} tarefas criadas com sucesso. Projeto ativado.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Erro ao processar tarefas: {ex.Message}");
+            return Result<TasksGenerationResult>.Failure($"Erro ao processar tarefas: {ex.Message}");
+        }
+    }
+
+    private static string BuildTasksPrompt(string template, Domain.Entities.Project project)
+    {
+        var startDate = project.StartDate?.ToString("dd/MM/yyyy") ?? "Não definida";
+        var endDate = project.EndDate?.ToString("dd/MM/yyyy") ?? "Não definida";
+
+        var totalDays = 0;
+        if (project.StartDate.HasValue && project.EndDate.HasValue)
+        {
+            totalDays = (project.EndDate.Value - project.StartDate.Value).Days;
+        }
+
+        var teamMembersSummary = project.ProjectMembers.Any()
+            ? string.Join("\n", project.ProjectMembers
+                .Where(m => m.User != null)
+                .Select(m => $"{m.User!.Name} - {m.ProjectFunction ?? "Sem papel definido"} - {m.Dedication ?? "Dedicação não informada"}"))
+            : "Nenhum membro definido";
+
+        var detailLevel = project.ExecutionSettings?.NivelDetalhePlano.ToString() ?? "Balanceado";
+
+        // Separar riscos por criticidade (simplificado - o prompt já vem formatado)
+        var risks = project.IA_Risks ?? "Nenhum risco identificado";
+
+        // Parse simples de riscos (assumindo formato com emojis)
+        var criticalRisks = ExtractRisksByLevel(risks, "🔴", "🟠");
+        var highRisks = ExtractRisksByLevel(risks, "🟠", "🟡");
+        var mediumRisks = ExtractRisksByLevel(risks, "🟡", "🟢");
+        var lowRisks = ExtractRisksByLevel(risks, "🟢", null);
+
+        return template
+            .Replace("{ProjectName}", project.Name)
+            .Replace("{StartDate}", startDate)
+            .Replace("{EndDate}", endDate)
+            .Replace("{TotalDays}", totalDays.ToString())
+            .Replace("{DetailLevel}", detailLevel)
+            .Replace("{TeamMembersSummary}", teamMembersSummary)
+            .Replace("{Overview}", project.IA_Overview ?? "")
+            .Replace("{CriticalRisks}", criticalRisks)
+            .Replace("{HighRisks}", highRisks)
+            .Replace("{MediumRisks}", mediumRisks)
+            .Replace("{LowRisks}", lowRisks)
+            .Replace("{Recommendations}", project.IA_Recommendations ?? "");
+    }
+
+    private static string ExtractRisksByLevel(string allRisks, string startEmoji, string? endEmoji)
+    {
+        var startIndex = allRisks.IndexOf(startEmoji);
+        if (startIndex == -1) return "Nenhum";
+
+        var endIndex = endEmoji != null ? allRisks.IndexOf(endEmoji, startIndex + 1) : allRisks.Length;
+        if (endIndex == -1) endIndex = allRisks.Length;
+
+        var section = allRisks.Substring(startIndex, endIndex - startIndex).Trim();
+        return string.IsNullOrWhiteSpace(section) ? "Nenhum" : section;
+    }
+
+    private static List<TaskSuggestion> ParseTasksArray(string text)
+    {
+        text = text.Trim();
+
+        Console.WriteLine("[DEBUG] ParseTasksArray - Tamanho do texto: " + text.Length);
+        Console.WriteLine("[DEBUG] ParseTasksArray - Últimos 200 chars: " + (text.Length > 200 ? text[^200..] : text));
+
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        // Extrair o bloco entre o primeiro '[' e o último ']'
+        var arrayStart = text.IndexOf('[');
+        var arrayEnd   = text.LastIndexOf(']');
+
+        if (arrayStart < 0)
+        {
+            Console.WriteLine("[ERROR] Nenhum array JSON encontrado no texto.");
+            return new List<TaskSuggestion>();
+        }
+
+        // Se não há ']' de fechamento o JSON foi truncado — tentar recuperar os objetos completos
+        string candidate;
+        if (arrayEnd <= arrayStart)
+        {
+            Console.WriteLine("[WARNING] JSON array truncado (sem ']' final) — tentando recuperação parcial.");
+            candidate = RecoverTruncatedArray(text[arrayStart..]);
+        }
+        else
+        {
+            candidate = text[arrayStart..(arrayEnd + 1)];
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(candidate, options);
+            if (parsed != null && parsed.Count > 0)
+            {
+                Console.WriteLine($"[SUCCESS] ✓ {parsed.Count} tarefas parseadas.");
+                return parsed.Select(t => new TaskSuggestion(
+                    t.Name ?? "Tarefa sem nome",
+                    t.Description,
+                    t.Priority ?? "Média",
+                    t.SuggestedResponsible,
+                    t.DeadlineInDays,
+                    t.Order
+                )).ToList();
+            }
+
+            Console.WriteLine("[WARNING] Array de tarefas vazio ou nulo após parse.");
+            return new List<TaskSuggestion>();
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[ERROR] Erro ao parsear array de tarefas: {ex.Message}");
+            Console.WriteLine("[INFO] Tentando recuperação parcial do JSON truncado...");
+
+            // Última tentativa: recuperar objetos completos do array truncado
+            var recovered = RecoverTruncatedArray(candidate);
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(recovered, options);
+                if (parsed != null && parsed.Count > 0)
+                {
+                    Console.WriteLine($"[SUCCESS] ✓ {parsed.Count} tarefas recuperadas do JSON truncado.");
+                    return parsed.Select(t => new TaskSuggestion(
+                        t.Name ?? "Tarefa sem nome",
+                        t.Description,
+                        t.Priority ?? "Média",
+                        t.SuggestedResponsible,
+                        t.DeadlineInDays,
+                        t.Order
+                    )).ToList();
+                }
+            }
+            catch (JsonException ex2)
+            {
+                Console.WriteLine($"[ERROR] Recuperação parcial também falhou: {ex2.Message}");
+            }
+
+            return new List<TaskSuggestion>();
+        }
+    }
+
+    /// <summary>
+    /// Tenta recuperar um array JSON truncado mantendo apenas os objetos completos.
+    /// Um objeto é considerado completo se tem chaves balanceadas e termina com '}'.
+    /// </summary>
+    private static string RecoverTruncatedArray(string truncated)
+    {
+        var items = new List<string>();
+        var depth = 0;
+        var start = -1;
+
+        for (var i = 0; i < truncated.Length; i++)
+        {
+            if (truncated[i] == '{')
+            {
+                if (depth == 0) start = i;
+                depth++;
+            }
+            else if (truncated[i] == '}')
+            {
+                depth--;
+                if (depth == 0 && start >= 0)
+                {
+                    items.Add(truncated[start..(i + 1)]);
+                    start = -1;
+                }
+            }
+        }
+
+        return items.Count > 0 ? "[" + string.Join(",", items) + "]" : "[]";
     }
 }

@@ -24,4 +24,9 @@ public class ProjectCompleteDto
     public List<ProjectMemberCompleteDto> Members { get; set; } = new();
     public ProjectDetailsCompleteDto? Details { get; set; }
     public ProjectExecutionSettingsCompleteDto? ExecutionSettings { get; set; }
+
+    // Análise gerada pela IA (salva no banco após geração)
+    public string? IaOverview { get; set; }
+    public string? IaRisks { get; set; }
+    public string? IaRecommendations { get; set; }
 }
