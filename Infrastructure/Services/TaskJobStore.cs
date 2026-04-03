@@ -14,11 +14,12 @@ public class TaskJobResult
 {
     public TaskJobStatus Status { get; set; } = TaskJobStatus.Pending;
     public int TasksCreated { get; set; }
+    public string? ResultPayload { get; set; }  // JSON serializado para jobs de análise
     public string? ErrorMessage { get; set; }
 }
 
 /// <summary>
-/// Armazena em memória o estado de jobs assíncronos de geração de tarefas.
+/// Armazena em memória o estado de jobs assíncronos (análise e geração de tarefas).
 /// Registrado como Singleton.
 /// </summary>
 public class TaskJobStore
@@ -41,6 +42,11 @@ public class TaskJobStore
     public void SetCompleted(string id, int tasksCreated)
     {
         _jobs[id] = new TaskJobResult { Status = TaskJobStatus.Completed, TasksCreated = tasksCreated };
+    }
+
+    public void SetCompletedWithPayload(string id, string resultPayload)
+    {
+        _jobs[id] = new TaskJobResult { Status = TaskJobStatus.Completed, ResultPayload = resultPayload };
     }
 
     public void SetFailed(string id, string errorMessage)
