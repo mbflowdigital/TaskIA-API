@@ -12,7 +12,7 @@ namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
 public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
-public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion> Tasks, string PromptSent);
+public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion>? Tasks, string PromptSent);
 public record TeamMemberInput(string UserId, string UserName, string Role, string Dedication, bool IsApprover, string? RoleDescription);
 public record ExternalDependencyInput(string Name, string WhatIsNeeded, string? Deadline, string Criticality);
 public record IntegrationInput(string SystemName, string Type, string Criticality, string Status);
@@ -347,62 +347,30 @@ public class ClaudeService
 
             if (project != null)
             {
+                // Atualizar prompt enviado
                 project.UpdatePromptEnviado(prompt);
+
+                // Salvar resultados da análise da IA
+                project.UpdateAnalysisResults(
+                    analysis.Overview,
+                    analysis.Risks,
+                    analysis.Recommendations
+                );
+
+                // Mudar status para "Pendente Aprovação"
+                project.UpdateStatus("Waiting_Approve");
+
                 await _projectRepository.UpdateAsync(project, cancellationToken);
-
-                // Criar as tarefas no Board baseado nas sugestões da IA
-                if (analysis.Tasks != null && analysis.Tasks.Count > 0)
-                {
-                    var boards = new List<Domain.Entities.Board>();
-
-                    foreach (var task in analysis.Tasks)
-                    {
-                        // Buscar usuário sugerido pelo nome na lista de membros da equipe
-                        Guid? sugestaoResponsavelId = null;
-                        if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
-                        {
-                            var teamMember = data.TeamMembers?.FirstOrDefault(m => 
-                                m.UserName.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
-
-                            if (teamMember != null && Guid.TryParse(teamMember.UserId, out var userId))
-                            {
-                                sugestaoResponsavelId = userId;
-                                Console.WriteLine($"[DEBUG] Usuário sugerido '{task.SuggestedResponsible}' encontrado: {userId}");
-                            }
-                            else
-                            {
-                                Console.WriteLine($"[WARNING] Usuário sugerido '{task.SuggestedResponsible}' não encontrado nos membros da equipe para a tarefa '{task.Name}'");
-                            }
-                        }
-
-                        var board = new Domain.Entities.Board(
-                            projectId: project.Id,
-                            name: task.Name,
-                            description: task.Description,
-                            status: "A Fazer",
-                            priority: task.Priority,
-                            sugestaoResponsavelId: sugestaoResponsavelId,
-                            prazoEmDias: task.DeadlineInDays,
-                            ordemNoBoard: task.Order
-                        );
-
-                        // Atribuir o criador do projeto como responsável inicial da tarefa
-                        board.AssignResponsavel(project.UserId);
-                        boards.Add(board);
-                    }
-
-                    await _boardRepository.AddRangeAsync(boards, cancellationToken);
-                    Console.WriteLine($"[DEBUG] {boards.Count} tarefas criadas no Board para o projeto {project.Name} (Responsável: {project.UserId})");
-                }
-
                 await _context.SaveChangesAsync(cancellationToken);
+
+                Console.WriteLine($"[SUCCESS] ✓ Análise salva e projeto '{project.Name}' marcado como 'Pendente Aprovação'");
             }
             else
             {
                 Console.WriteLine($"[DEBUG] ATENÇÃO: Projeto '{data.ProjectName}' NÃO foi encontrado!");
             }
 
-            return Result<ProjectAnalysis>.Success(analysis, $"Análise gerada com sucesso. {analysis.Tasks?.Count ?? 0} tarefas criadas.");
+            return Result<ProjectAnalysis>.Success(analysis, "Análise gerada com sucesso. Aguardando aprovação do usuário para gerar tarefas.");
         }
         catch (Exception ex)
         {
