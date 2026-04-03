@@ -29,7 +29,9 @@ public record CreateUserRequest(
     string CPF,
     DateTime BirthDate,
     string? Phone = null,
-    string? Role = null
+    string? Role = null,
+    Guid? CompanyId = null,
+    int? PositionId = null
 );
 
 /// <summary>

@@ -83,7 +83,7 @@ public class UserService : IUserService
                 return Result<UserDto>.Failure("Usuários padrão não podem criar outros usuários.");
             }
 
-            // ADM só pode criar USER e sempre dentro da própria empresa
+            // ADM só pode criar USER
             if (actorRole == UserRole.ADM)
             {
                 if (targetRole != UserRole.USER)
@@ -104,6 +104,25 @@ public class UserService : IUserService
                 targetRole = UserRole.ADM_MASTER;
             }
 
+            // Resolver empresa do novo usuário:
+            // - ADM criando USER: sempre usa a própria empresa do ADM (request.CompanyId ignorado)
+            // - ADM_MASTER criando USER: usa request.CompanyId (opcional)
+            // - ADM_MASTER criando ADM: usa request.CompanyId (opcional)
+            //     * Com empresa → novo ADM não precisa criar empresa no 1º acesso (RequiresOnboarding = false)
+            //     * Sem empresa → novo ADM cria a própria empresa no 1º acesso (RequiresOnboarding = true)
+            Guid? resolvedCompanyId = null;
+            if (targetRole == UserRole.USER)
+            {
+                if (actorRole == UserRole.ADM)
+                    resolvedCompanyId = actor?.CompanyId;  // ADM sempre usa a própria empresa
+                else
+                    resolvedCompanyId = request.CompanyId; // ADM_MASTER pode informar ou não
+            }
+            else if (targetRole == UserRole.ADM && actorRole == UserRole.ADM_MASTER)
+            {
+                resolvedCompanyId = request.CompanyId; // ADM_MASTER pode pré-atribuir empresa ao novo ADM
+            }
+
             var user = new User
             {
                 Name = request.Name,
@@ -112,7 +131,8 @@ public class UserService : IUserService
                 CPF = request.CPF.Replace(".", "").Replace("-", "").Trim(),
                 BirthDate = request.BirthDate,
                 RoleId = (int)targetRole,
-                CompanyId = actorRole == UserRole.ADM ? actor?.CompanyId : null
+                CompanyId = resolvedCompanyId,
+                PositionId = request.PositionId > 0 ? request.PositionId : null
             };
 
             // 4. Hash da senha padrão (data de nascimento) 

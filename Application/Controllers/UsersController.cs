@@ -2,8 +2,10 @@ using Application.Core.DTOs.Users;
 using Application.Core.Interfaces.Services;
 using Domain.Common;
 using Domain.Enums;
+using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Application.Controllers;
@@ -20,10 +22,12 @@ namespace Application.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly ApplicationDbContext _context;
 
-    public UsersController(IUserService userService)
+    public UsersController(IUserService userService, ApplicationDbContext context)
     {
         _userService = userService;
+        _context = context;
     }
 
     /// <summary>
@@ -253,5 +257,20 @@ public class UsersController : ControllerBase
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Lista todos os cargos disponíveis para seleção no cadastro de usuários.
+    /// </summary>
+    [HttpGet("positions")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPositions(CancellationToken cancellationToken)
+    {
+        var positions = await _context.Positions
+            .OrderBy(p => p.PositionName)
+            .Select(p => new { id = p.Id, positionName = p.PositionName, description = p.Description })
+            .ToListAsync(cancellationToken);
+
+        return Ok(Result<object>.Success(positions, $"{positions.Count} cargo(s) encontrado(s)."));
     }
 }
