@@ -758,7 +758,7 @@ public class ClaudeService
         var requestBody = new
         {
             model = _model,
-            max_tokens = 8192,
+            max_tokens = 16000,
             messages = new[]
             {
                 new { role = "user", content = prompt }
@@ -928,49 +928,112 @@ public class ClaudeService
     {
         text = text.Trim();
 
-        Console.WriteLine("[DEBUG] ParseTasksArray - Texto original:");
-        Console.WriteLine(text.Length > 500 ? text.Substring(0, 500) + "..." : text);
+        Console.WriteLine("[DEBUG] ParseTasksArray - Tamanho do texto: " + text.Length);
+        Console.WriteLine("[DEBUG] ParseTasksArray - Últimos 200 chars: " + (text.Length > 200 ? text[^200..] : text));
 
-        // Remover markdown se existir
-        if (text.StartsWith("```"))
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        // Extrair o bloco entre o primeiro '[' e o último ']'
+        var arrayStart = text.IndexOf('[');
+        var arrayEnd   = text.LastIndexOf(']');
+
+        if (arrayStart < 0)
         {
-            var start = text.IndexOf('[');
-            var end = text.LastIndexOf(']');
-            if (start >= 0 && end > start)
-            {
-                text = text[start..(end + 1)];
-            }
+            Console.WriteLine("[ERROR] Nenhum array JSON encontrado no texto.");
+            return new List<TaskSuggestion>();
+        }
+
+        // Se não há ']' de fechamento o JSON foi truncado — tentar recuperar os objetos completos
+        string candidate;
+        if (arrayEnd <= arrayStart)
+        {
+            Console.WriteLine("[WARNING] JSON array truncado (sem ']' final) — tentando recuperação parcial.");
+            candidate = RecoverTruncatedArray(text[arrayStart..]);
+        }
+        else
+        {
+            candidate = text[arrayStart..(arrayEnd + 1)];
         }
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(text, new JsonSerializerOptions
+            var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(candidate, options);
+            if (parsed != null && parsed.Count > 0)
             {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (parsed == null || parsed.Count == 0)
-            {
-                Console.WriteLine("[WARNING] Array de tarefas vazio ou nulo");
-                return new List<TaskSuggestion>();
+                Console.WriteLine($"[SUCCESS] ✓ {parsed.Count} tarefas parseadas.");
+                return parsed.Select(t => new TaskSuggestion(
+                    t.Name ?? "Tarefa sem nome",
+                    t.Description,
+                    t.Priority ?? "Média",
+                    t.SuggestedResponsible,
+                    t.DeadlineInDays,
+                    t.Order
+                )).ToList();
             }
 
-            var tasks = parsed.Select(t => new TaskSuggestion(
-                t.Name ?? "Tarefa sem nome",
-                t.Description,
-                t.Priority ?? "Média",
-                t.SuggestedResponsible,
-                t.DeadlineInDays,
-                t.Order
-            )).ToList();
-
-            Console.WriteLine($"[SUCCESS] ✓ {tasks.Count} tarefas parseadas com sucesso");
-            return tasks;
+            Console.WriteLine("[WARNING] Array de tarefas vazio ou nulo após parse.");
+            return new List<TaskSuggestion>();
         }
         catch (JsonException ex)
         {
             Console.WriteLine($"[ERROR] Erro ao parsear array de tarefas: {ex.Message}");
+            Console.WriteLine("[INFO] Tentando recuperação parcial do JSON truncado...");
+
+            // Última tentativa: recuperar objetos completos do array truncado
+            var recovered = RecoverTruncatedArray(candidate);
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<ClaudeTaskJson>>(recovered, options);
+                if (parsed != null && parsed.Count > 0)
+                {
+                    Console.WriteLine($"[SUCCESS] ✓ {parsed.Count} tarefas recuperadas do JSON truncado.");
+                    return parsed.Select(t => new TaskSuggestion(
+                        t.Name ?? "Tarefa sem nome",
+                        t.Description,
+                        t.Priority ?? "Média",
+                        t.SuggestedResponsible,
+                        t.DeadlineInDays,
+                        t.Order
+                    )).ToList();
+                }
+            }
+            catch (JsonException ex2)
+            {
+                Console.WriteLine($"[ERROR] Recuperação parcial também falhou: {ex2.Message}");
+            }
+
             return new List<TaskSuggestion>();
         }
+    }
+
+    /// <summary>
+    /// Tenta recuperar um array JSON truncado mantendo apenas os objetos completos.
+    /// Um objeto é considerado completo se tem chaves balanceadas e termina com '}'.
+    /// </summary>
+    private static string RecoverTruncatedArray(string truncated)
+    {
+        var items = new List<string>();
+        var depth = 0;
+        var start = -1;
+
+        for (var i = 0; i < truncated.Length; i++)
+        {
+            if (truncated[i] == '{')
+            {
+                if (depth == 0) start = i;
+                depth++;
+            }
+            else if (truncated[i] == '}')
+            {
+                depth--;
+                if (depth == 0 && start >= 0)
+                {
+                    items.Add(truncated[start..(i + 1)]);
+                    start = -1;
+                }
+            }
+        }
+
+        return items.Count > 0 ? "[" + string.Join(",", items) + "]" : "[]";
     }
 }
