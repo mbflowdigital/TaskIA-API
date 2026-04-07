@@ -41,6 +41,12 @@ public class User : BaseEntity
 
     public bool IsFirstAccess { get; set; } = true;
 
+    /// <summary>
+    /// Indica se o ADM/ADM_MASTER já concluiu o wizard de onboarding (criação de empresa).
+    /// Para USERs criados normalmente, já nasce true (não precisam de onboarding).
+    /// </summary>
+    public bool IsOnboardingCompleted { get; set; } = false;
+
     // Relacionamento com Role (um usuário tem um perfil)
     [ForeignKey(nameof(RoleId))]
     public virtual RoleEntity? Role { get; set; }

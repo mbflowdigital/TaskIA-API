@@ -132,7 +132,9 @@ public class UserService : IUserService
                 BirthDate = request.BirthDate,
                 RoleId = (int)targetRole,
                 CompanyId = resolvedCompanyId,
-                PositionId = request.PositionId > 0 ? request.PositionId : null
+                PositionId = request.PositionId > 0 ? request.PositionId : null,
+                // ADM/USER criados com empresa já atribuída não precisam do wizard de onboarding
+                IsOnboardingCompleted = resolvedCompanyId.HasValue
             };
 
             // 4. Hash da senha padrão (data de nascimento) 

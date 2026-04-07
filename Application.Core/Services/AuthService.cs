@@ -115,6 +115,7 @@ public class AuthService : IAuthService
                 Phone = user.Phone,
                 Role = user.Role?.RoleName ?? "USER",
                 IsFirstAccess = user.IsFirstAccess,
+                RequiresOnboarding = !user.IsOnboardingCompleted,
                 Token = token,
                 TokenExpiration = tokenExpiration,
                 RefreshToken = refreshToken
@@ -239,7 +240,7 @@ public class AuthService : IAuthService
                 CPF = user.CPF,
                 Phone = user.Phone,
                 IsFirstAccess = user.IsFirstAccess,
-                RequiresOnboarding = user.CompanyId == null,
+                RequiresOnboarding = !user.IsOnboardingCompleted,
                 Token = token,
                 TokenExpiration = tokenExpiration,
                  RefreshToken = refreshToken,
@@ -634,6 +635,7 @@ public class AuthService : IAuthService
             var company = new Domain.Entities.Company
             {
                 Name = request.CompanyName.Trim(),
+                CNPJ = request.Cnpj.Replace(".", "").Replace("/", "").Replace("-", "").Trim(),
                 Address = request.Address.Trim(),
                 NumberOfMembers = request.NumberOfMembers,
                 Category = request.Category.Trim()
@@ -641,8 +643,9 @@ public class AuthService : IAuthService
 
             await _companyRepository.AddAsync(company, cancellationToken);
 
-            // 4. Vincular usuário à empresa
+            // 4. Vincular usuário à empresa e marcar onboarding como concluído
             user.CompanyId = company.Id;
+            user.IsOnboardingCompleted = true;
             await _userRepository.UpdateAsync(user, cancellationToken);
 
             await _unitOfWork.CommitAsync(cancellationToken);
