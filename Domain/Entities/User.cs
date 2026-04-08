@@ -62,6 +62,9 @@ public class User : BaseEntity
     // Relacionamento com Projects (um usuário pode ter vários projetos)
     public virtual ICollection<Project> Projects { get; set; } = new List<Project>();
 
+    // Relacionamento com Imagem de Perfil (um usuário tem uma imagem de perfil)
+    public virtual UserProfileImage? ProfileImage { get; set; }
+
     // Construtor público
     public User() { }
 

@@ -65,4 +65,31 @@ public interface IUserService
     /// Verifica se email já está em uso
     /// </summary>
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Faz upload da imagem de perfil do usuário
+    /// </summary>
+    Task<Result<ProfileImageDto>> UploadProfileImageAsync(
+        UploadProfileImageRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Obtém a imagem de perfil do usuário
+    /// </summary>
+    Task<Result<(byte[] ImageData, string ContentType)>> GetProfileImageAsync(
+        Guid userId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Remove a imagem de perfil do usuário
+    /// </summary>
+    Task<Result> DeleteProfileImageAsync(
+        Guid userId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default);
 }

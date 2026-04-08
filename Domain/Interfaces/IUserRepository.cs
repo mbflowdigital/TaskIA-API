@@ -44,6 +44,26 @@ public interface IUserRepository : IRepository<User>
     /// </summary>
     Task<User?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Obtém a imagem de perfil do usuário
+    /// </summary>
+    Task<UserProfileImage?> GetProfileImageAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adiciona uma nova imagem de perfil
+    /// </summary>
+    Task AddProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atualiza a imagem de perfil existente
+    /// </summary>
+    Task UpdateProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Remove a imagem de perfil
+    /// </summary>
+    Task DeleteProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default);
+
     // TODO: Adicionar outros métodos específicos conforme necessário
     // Exemplo: Task<IEnumerable<User>> GetActiveUsersAsync(CancellationToken cancellationToken = default);
 }

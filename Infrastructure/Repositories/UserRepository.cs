@@ -107,6 +107,41 @@ public class UserRepository : Repository<User>, IUserRepository
             .FirstOrDefaultAsync(u => u.Name.ToLower().Contains(normalizedName) && u.IsActive, cancellationToken);
     }
 
+    /// <summary>
+    /// Obtém a imagem de perfil do usuário
+    /// </summary>
+    public async Task<UserProfileImage?> GetProfileImageAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.UserProfileImages
+            .FirstOrDefaultAsync(pi => pi.UserId == userId && pi.IsActive, cancellationToken);
+    }
+
+    /// <summary>
+    /// Adiciona uma nova imagem de perfil
+    /// </summary>
+    public async Task AddProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default)
+    {
+        await _context.UserProfileImages.AddAsync(profileImage, cancellationToken);
+    }
+
+    /// <summary>
+    /// Atualiza a imagem de perfil existente
+    /// </summary>
+    public async Task UpdateProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default)
+    {
+        _context.UserProfileImages.Update(profileImage);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Remove a imagem de perfil
+    /// </summary>
+    public async Task DeleteProfileImageAsync(UserProfileImage profileImage, CancellationToken cancellationToken = default)
+    {
+        _context.UserProfileImages.Remove(profileImage);
+        await Task.CompletedTask;
+    }
+
     // TODO: Exemplo de método específico que pode ser adicionado
     // public async Task<IEnumerable<User>> GetVerifiedUsersAsync(CancellationToken cancellationToken = default)
     // {

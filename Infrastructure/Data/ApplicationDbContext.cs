@@ -31,6 +31,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProjectSensitiveData> ProjectSensitiveData { get; set; } = null!;
     public DbSet<Parameter> Parameters { get; set; } = null!;
     public DbSet<Board> Board { get; set; } = null!;
+    public DbSet<UserProfileImage> UserProfileImages { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -77,15 +78,17 @@ public class ApplicationDbContext : DbContext
 
             // Seed inicial com posições comuns
             entity.HasData(
-                new PositionsEntity { Id = (int)UserPosition.Developer, PositionName = "Desenvolvedor", Description = "Desenvolvedor de software" },
-                new PositionsEntity { Id = (int)UserPosition.Designer, PositionName = "Designer", Description = "Designer UI/UX" },
-                new PositionsEntity { Id = (int)UserPosition.ProjectManager, PositionName = "Gerente de Projeto", Description = "Gerente de projeto" },
-                new PositionsEntity { Id = (int)UserPosition.ProductOwner, PositionName = "Product Owner", Description = "Dono do produto" },
-                new PositionsEntity { Id = (int)UserPosition.ScrumMaster, PositionName = "Scrum Master", Description = "Facilitador Scrum" },
-                new PositionsEntity { Id = (int)UserPosition.QA, PositionName = "QA", Description = "Analista de qualidade" },
-                new PositionsEntity { Id = (int)UserPosition.DevOps, PositionName = "DevOps", Description = "Engenheiro DevOps" },
-                new PositionsEntity { Id = (int)UserPosition.Analyst, PositionName = "Analista", Description = "Analista de sistemas" },
-                new PositionsEntity { Id = (int)UserPosition.Other, PositionName = "Outro", Description = "Outra posição" }
+                new PositionsEntity { Id = (int)UserPosition.GerenteDeProjeto, PositionName = "Gerente de Projeto", Description = "Gerente de projeto" },
+                new PositionsEntity { Id = (int)UserPosition.Coordenador, PositionName = "Coordenador", Description = "Coordenador" },
+                new PositionsEntity { Id = (int)UserPosition.Supervisor, PositionName = "Supervisor", Description = "Supervisor" },
+                new PositionsEntity { Id = (int)UserPosition.Engenheiro, PositionName = "Engenheiro", Description = "Engenheiro" },
+                new PositionsEntity { Id = (int)UserPosition.Tecnico, PositionName = "Técnico", Description = "Técnico" },
+                new PositionsEntity { Id = (int)UserPosition.Especialista, PositionName = "Especialista", Description = "Especialista" },
+                new PositionsEntity { Id = (int)UserPosition.Analista, PositionName = "Analista", Description = "Analista" },
+                new PositionsEntity { Id = (int)UserPosition.Operador, PositionName = "Operador", Description = "Operador" },
+                new PositionsEntity { Id = (int)UserPosition.Assistente, PositionName = "Assistente", Description = "Assistente" },
+                new PositionsEntity { Id = (int)UserPosition.Administrador, PositionName = "Administrador", Description = "Administrador" },
+                new PositionsEntity { Id = (int)UserPosition.Consultor, PositionName = "Consultor", Description = "Consultor" }
             );
         });
 
@@ -107,6 +110,18 @@ public class ApplicationDbContext : DbContext
             entity.Property(u => u.RoleId)
                 .HasDefaultValue((int)UserRole.USER);
         });
+
+        // Relacionamento User -> UserProfileImage (1:1)
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.ProfileImage)
+            .WithOne(pi => pi.User)
+            .HasForeignKey<UserProfileImage>(pi => pi.UserId)
+            .OnDelete(DeleteBehavior.Cascade); // Deleta imagem ao deletar usuário
+
+        // Índice único para garantir uma imagem por usuário
+        modelBuilder.Entity<UserProfileImage>()
+            .HasIndex(pi => pi.UserId)
+            .IsUnique();
 
 
         // Relacionamento Company -> Projects (1:N)
