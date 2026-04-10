@@ -17,6 +17,8 @@ public record BoardDto(
     string? ResponsavelName,
     Guid? SugestaoResponsavelId,
     string? SugestaoResponsavelName,
+    Guid? ParentTaskId,
+    IEnumerable<BoardDto>? SubTasks,
     DateTime CreatedAt,
     DateTime? UpdatedAt
 );

@@ -18,6 +18,12 @@ namespace Domain.Enums
         Operador = 8,
         Assistente = 9,
         Administrador = 10,
-        Consultor = 11
+        Consultor = 11,
+        QA = 12,
+        ScrumMaster = 13,
+        Desenvolvedor = 14,
+        ProductOwner = 15,
+        DevOps = 16,
+        Outro = 99
     }
 }

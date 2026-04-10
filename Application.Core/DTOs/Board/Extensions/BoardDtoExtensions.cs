@@ -12,8 +12,9 @@ public static class BoardDtoExtensions
     /// Converte uma entidade Board para BoardDto
     /// </summary>
     /// <param name="board">Entidade Board a ser convertida</param>
+    /// <param name="includeSubTasks">Se deve incluir as subtarefas</param>
     /// <returns>BoardDto com os dados mapeados</returns>
-    public static BoardDto ToDto(this Domain.Entities.Board board)
+    public static BoardDto ToDto(this Domain.Entities.Board board, bool includeSubTasks = true)
     {
         return new BoardDto(
             Id: board.Id,
@@ -29,6 +30,10 @@ public static class BoardDtoExtensions
             ResponsavelName: board.Responsavel?.Name,
             SugestaoResponsavelId: board.SugestaoResponsavelId,
             SugestaoResponsavelName: board.SugestaoResponsavel?.Name,
+            ParentTaskId: board.ParentTaskId,
+            SubTasks: includeSubTasks && board.SubTasks?.Any() == true 
+                ? board.SubTasks.Select(st => st.ToDto(includeSubTasks: false)).ToList() 
+                : null,
             CreatedAt: board.CreatedAt,
             UpdatedAt: board.UpdatedAt
         );
@@ -38,9 +43,10 @@ public static class BoardDtoExtensions
     /// Converte uma coleção de Board para uma coleção de BoardDto
     /// </summary>
     /// <param name="boards">Coleção de entidades Board</param>
+    /// <param name="includeSubTasks">Se deve incluir as subtarefas</param>
     /// <returns>Coleção de BoardDto</returns>
-    public static IEnumerable<BoardDto> ToDto(this IEnumerable<Domain.Entities.Board> boards)
+    public static IEnumerable<BoardDto> ToDto(this IEnumerable<Domain.Entities.Board> boards, bool includeSubTasks = true)
     {
-        return boards.Select(b => b.ToDto());
+        return boards.Select(b => b.ToDto(includeSubTasks));
     }
 }

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 namespace Infrastructure.Services;
 
 public record ProjectSuggestion(string Description, string Objective);
-public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order);
+public record TaskSuggestion(string Name, string? Description, string Priority, string? SuggestedResponsible, int DeadlineInDays, decimal Order, decimal? ParentTaskOrder);
 public record ProjectAnalysis(string Overview, string Risks, string Recommendations, List<TaskSuggestion>? Tasks, string PromptSent);
 public record GenerateTasksInput(Guid ProjectId);
 public record TasksGenerationResult(List<TaskSuggestion> Tasks, int TasksCreated, string PromptSent);
@@ -238,6 +238,9 @@ public class ClaudeService
 
         [JsonPropertyName("order")]
         public decimal Order { get; set; }
+
+        [JsonPropertyName("parentTaskOrder")]
+        public decimal? ParentTaskOrder { get; set; }
     }
 
     public async Task<Result<ProjectAnalysis>> AnalyzeProjectAsync(
@@ -556,7 +559,8 @@ public class ClaudeService
                 t.Priority ?? "Média",
                 t.SuggestedResponsible,
                 t.DeadlineInDays,
-                t.Order
+                t.Order,
+                t.ParentTaskOrder
             )).ToList() ?? new List<TaskSuggestion>();
 
             Console.WriteLine($"[DEBUG] ParseAnalysis - Tarefas processadas: {tasks.Count}");
@@ -809,11 +813,21 @@ public class ClaudeService
             if (tasks.Count == 0)
                 return Result<TasksGenerationResult>.Failure("Nenhuma tarefa foi gerada pela IA.");
 
-            // 9. Criar tarefas no Board
-            var boards = new List<Domain.Entities.Board>();
+            // 9. Separar tarefas principais de subtarefas
+            var mainTasks = tasks.Where(t => t.ParentTaskOrder == null).ToList();
+            var subTasks = tasks.Where(t => t.ParentTaskOrder != null).ToList();
+
+            Console.WriteLine($"[INFO] Total de tarefas: {tasks.Count} (Principais: {mainTasks.Count}, Subtarefas: {subTasks.Count})");
+
             var teamMembers = projectDetails.ProjectMembers.ToList();
 
-            foreach (var task in tasks)
+            // Dicionário para mapear IDs temporários (da IA) para IDs reais (do banco)
+            var taskIdMapping = new Dictionary<Guid, Guid>();
+
+            // 10. Criar tarefas principais primeiro
+            var mainBoards = new List<Domain.Entities.Board>();
+
+            foreach (var task in mainTasks)
             {
                 // Buscar usuário sugerido
                 Guid? sugestaoResponsavelId = null;
@@ -841,26 +855,98 @@ public class ClaudeService
                     priority: task.Priority,
                     sugestaoResponsavelId: sugestaoResponsavelId,
                     prazoEmDias: task.DeadlineInDays,
-                    ordemNoBoard: task.Order
+                    ordemNoBoard: task.Order,
+                    parentTaskId: null // Tarefas principais não têm pai
                 );
 
                 // Atribuir criador do projeto como responsável inicial
                 board.AssignResponsavel(project.UserId);
-                boards.Add(board);
+                mainBoards.Add(board);
+
+                // Mapear ID temporário (gerado pela IA) para ID real (do banco)
+                // IMPORTANTE: Precisamos de um identificador único da tarefa da IA
+                // Como não temos, vamos usar a Order como chave temporária
+                Console.WriteLine($"[DEBUG] Tarefa principal '{task.Name}' criada com ID: {board.Id} (Order: {task.Order})");
             }
 
-            await _boardRepository.AddRangeAsync(boards, cancellationToken);
+            // Salvar tarefas principais
+            await _boardRepository.AddRangeAsync(mainBoards, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
 
-            // 10. Mudar status do projeto para Active
+            Console.WriteLine($"[SUCCESS] ✓ {mainBoards.Count} tarefas principais criadas no banco");
+
+            // 11. Criar dicionário de mapeamento usando Order como chave
+            // (assumindo que Order é único por tarefa conforme instruções do prompt)
+            var orderToIdMap = mainBoards.ToDictionary(b => b.OrdemNoBoard, b => b.Id);
+
+            // 12. Criar subtarefas usando IDs reais das tarefas pai
+            var subBoards = new List<Domain.Entities.Board>();
+
+            foreach (var task in subTasks)
+            {
+                // Mapear ParentTaskOrder (decimal) para ParentTaskId (Guid) real
+                Guid? parentTaskId = null;
+                if (task.ParentTaskOrder.HasValue)
+                {
+                    if (orderToIdMap.TryGetValue(task.ParentTaskOrder.Value, out var parentId))
+                    {
+                        parentTaskId = parentId;
+                        Console.WriteLine($"[DEBUG] Subtarefa '{task.Name}' linkada à tarefa pai com Order {task.ParentTaskOrder.Value} (ID: {parentId})");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[WARNING] Tarefa pai com Order {task.ParentTaskOrder.Value} não encontrada para subtarefa '{task.Name}'. Criando como tarefa principal.");
+                    }
+                }
+
+                // Buscar usuário sugerido
+                Guid? sugestaoResponsavelId = null;
+                if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
+                {
+                    var teamMember = teamMembers.FirstOrDefault(m => 
+                        m.User != null && m.User.Name.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
+
+                    if (teamMember != null)
+                    {
+                        sugestaoResponsavelId = teamMember.UserId;
+                    }
+                }
+
+                var board = new Domain.Entities.Board(
+                    projectId: project.Id,
+                    name: task.Name,
+                    description: task.Description,
+                    status: "A Fazer",
+                    priority: task.Priority,
+                    sugestaoResponsavelId: sugestaoResponsavelId,
+                    prazoEmDias: task.DeadlineInDays,
+                    ordemNoBoard: task.Order,
+                    parentTaskId: parentTaskId // ✓ Usando Guid mapeado do ParentTaskOrder
+                );
+
+                board.AssignResponsavel(project.UserId);
+                subBoards.Add(board);
+            }
+
+            if (subBoards.Count > 0)
+            {
+                await _boardRepository.AddRangeAsync(subBoards, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                Console.WriteLine($"[SUCCESS] ✓ {subBoards.Count} subtarefas criadas no banco");
+            }
+
+            var totalCreated = mainBoards.Count + subBoards.Count;
+
+            // 13. Mudar status do projeto para Active
             project.UpdateStatus("Active");
             await _projectRepository.UpdateAsync(project, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            Console.WriteLine($"[SUCCESS] ✓ {boards.Count} tarefas criadas e projeto ativado!");
+            Console.WriteLine($"[SUCCESS] ✓ {totalCreated} tarefas criadas e projeto ativado!");
 
-            var result = new TasksGenerationResult(tasks, boards.Count, prompt);
-            return Result<TasksGenerationResult>.Success(result, $"{boards.Count} tarefas criadas com sucesso. Projeto ativado.");
+            var result = new TasksGenerationResult(tasks, totalCreated, prompt);
+            return Result<TasksGenerationResult>.Success(result, $"{totalCreated} tarefas criadas com sucesso. Projeto ativado.");
         }
         catch (Exception ex)
         {
@@ -967,7 +1053,8 @@ public class ClaudeService
                     t.Priority ?? "Média",
                     t.SuggestedResponsible,
                     t.DeadlineInDays,
-                    t.Order
+                    t.Order,
+                    t.ParentTaskOrder
                 )).ToList();
             }
 
@@ -993,7 +1080,8 @@ public class ClaudeService
                         t.Priority ?? "Média",
                         t.SuggestedResponsible,
                         t.DeadlineInDays,
-                        t.Order
+                        t.Order,
+                        t.ParentTaskOrder
                     )).ToList();
                 }
             }

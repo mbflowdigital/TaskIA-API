@@ -33,6 +33,14 @@ public class Board : BaseEntity
 
     public decimal OrdemNoBoard { get; set; }
 
+    // Relacionamento hierárquico (Tarefa Pai/Filhas)
+    public Guid? ParentTaskId { get; set; }
+
+    [ForeignKey(nameof(ParentTaskId))]
+    public virtual Board? ParentTask { get; set; }
+
+    public virtual ICollection<Board> SubTasks { get; set; } = new List<Board>();
+
     // Relacionamento com Project
     [Required]
     public Guid ProjectId { get; set; }
@@ -60,7 +68,8 @@ public class Board : BaseEntity
         string priority,
         Guid? sugestaoResponsavelId,
         int prazoEmDias,
-        decimal ordemNoBoard)
+        decimal ordemNoBoard,
+        Guid? parentTaskId = null)
     {
         ProjectId = projectId;
         Name = name;
@@ -70,6 +79,7 @@ public class Board : BaseEntity
         SugestaoResponsavelId = sugestaoResponsavelId;
         PrazoEmDias = prazoEmDias;
         OrdemNoBoard = ordemNoBoard;
+        ParentTaskId = parentTaskId;
     }
 
     /// <summary>
@@ -176,6 +186,34 @@ public class Board : BaseEntity
         var validPriorities = new[] { "Baixa", "Média", "Alta", "Crítica" };
         return validPriorities.Contains(priority);
     }
+
+    /// <summary>
+    /// Define a tarefa pai (torna esta tarefa uma subtarefa)
+    /// </summary>
+    public void SetParentTask(Guid? parentTaskId)
+    {
+        ParentTaskId = parentTaskId;
+        SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Remove a tarefa pai (torna esta tarefa uma tarefa macro/principal)
+    /// </summary>
+    public void RemoveParentTask()
+    {
+        ParentTaskId = null;
+        SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Verifica se é uma tarefa macro (não tem pai)
+    /// </summary>
+    public bool IsMacroTask() => ParentTaskId == null;
+
+    /// <summary>
+    /// Verifica se é uma subtarefa (tem pai)
+    /// </summary>
+    public bool IsSubTask() => ParentTaskId != null;
 
     /// <summary>
     /// Soft delete da tarefa
