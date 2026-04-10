@@ -273,4 +273,91 @@ public class UsersController : ControllerBase
 
         return Ok(Result<object>.Success(positions, $"{positions.Count} cargo(s) encontrado(s)."));
     }
+
+    /// <summary>
+    /// Faz upload da imagem de perfil do usuário
+    /// </summary>
+    /// <param name="userId">ID do usuário</param>
+    /// <param name="file">Arquivo de imagem (JPG, PNG ou WEBP, máximo 5 MB)</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Informações da imagem cadastrada</returns>
+    /// <response code="200">Imagem cadastrada com sucesso</response>
+    /// <response code="400">Dados inválidos</response>
+    [HttpPost("{userId:guid}/profile-image")]
+    [ProducesResponseType(typeof(Result<ProfileImageDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadProfileImage(
+        Guid userId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(Result.Failure("Nenhum arquivo foi enviado."));
+        }
+
+        var (actorUserId, actorRole) = GetActorContext();
+
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream, cancellationToken);
+
+        var request = new UploadProfileImageRequest
+        {
+            UserId = userId,
+            ImageData = memoryStream.ToArray(),
+            ContentType = file.ContentType,
+            FileName = file.FileName
+        };
+
+        var result = await _userService.UploadProfileImageAsync(request, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
+    /// Obtém a imagem de perfil do usuário
+    /// </summary>
+    /// <param name="userId">ID do usuário</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Arquivo de imagem</returns>
+    /// <response code="200">Imagem retornada com sucesso</response>
+    /// <response code="404">Usuário não possui imagem de perfil</response>
+    [HttpGet("{userId:guid}/profile-image")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProfileImage(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+
+        var result = await _userService.GetProfileImageAsync(userId, actorUserId, actorRole, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return NotFound(Result.Failure(result.Message));
+        }
+
+        return File(result.Data.ImageData, result.Data.ContentType);
+    }
+
+    /// <summary>
+    /// Remove a imagem de perfil do usuário
+    /// </summary>
+    /// <param name="userId">ID do usuário</param>
+    /// <param name="cancellationToken">Token de cancelamento</param>
+    /// <returns>Resultado da operação</returns>
+    /// <response code="200">Imagem removida com sucesso</response>
+    /// <response code="400">Erro ao remover imagem</response>
+    [HttpDelete("{userId:guid}/profile-image")]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteProfileImage(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var (actorUserId, actorRole) = GetActorContext();
+
+        var result = await _userService.DeleteProfileImageAsync(userId, actorUserId, actorRole, cancellationToken);
+        return result.IsSuccess ? Ok(result) : BadRequest(result);
+    }
 }

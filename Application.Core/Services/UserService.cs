@@ -539,6 +539,210 @@ public class UserService : IUserService
     }
 
     /// <summary>
+    /// Faz upload da imagem de perfil do usuário
+    /// Formatos aceitos: JPG, PNG, WEBP
+    /// Tamanho máximo: 5 MB
+    /// </summary>
+    public async Task<Result<ProfileImageDto>> UploadProfileImageAsync(
+        UploadProfileImageRequest request,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<ProfileImageDto>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            // Validar permissões
+            if (actorUserId.HasValue && actorUserId.Value != request.UserId && actorRole != UserRole.ADM_MASTER)
+            {
+                if (actorRole == UserRole.ADM)
+                {
+                    var targetUser = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+                    if (targetUser == null || targetUser.CompanyId != actor?.CompanyId)
+                    {
+                        return Result<ProfileImageDto>.Failure("Sem permissão para alterar imagem deste usuário.");
+                    }
+                }
+                else
+                {
+                    return Result<ProfileImageDto>.Failure("Você só pode alterar sua própria imagem de perfil.");
+                }
+            }
+
+            // Validar formato
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (!allowedTypes.Contains(request.ContentType.ToLower()))
+            {
+                return Result<ProfileImageDto>.Failure("Formato de imagem inválido. Apenas JPG, PNG e WEBP são aceitos.");
+            }
+
+            // Validar tamanho (5 MB = 5.242.880 bytes)
+            const long maxSizeBytes = 5_242_880;
+            if (request.ImageData.Length > maxSizeBytes)
+            {
+                return Result<ProfileImageDto>.Failure("Imagem excede o tamanho máximo de 5 MB.");
+            }
+
+            if (request.ImageData.Length == 0)
+            {
+                return Result<ProfileImageDto>.Failure("Imagem vazia.");
+            }
+
+            var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+            if (user == null)
+            {
+                return Result<ProfileImageDto>.Failure("Usuário não encontrado.");
+            }
+
+            if (!user.IsActive)
+            {
+                return Result<ProfileImageDto>.Failure("Usuário está desativado.");
+            }
+
+            // Verificar se já existe imagem
+            var existingImage = await _userRepository.GetProfileImageAsync(request.UserId, cancellationToken);
+
+            UserProfileImage profileImage;
+            if (existingImage != null)
+            {
+                // Atualizar imagem existente
+                existingImage.ImageData = request.ImageData;
+                existingImage.ContentType = request.ContentType;
+                existingImage.FileSizeBytes = request.ImageData.Length;
+                await _userRepository.UpdateProfileImageAsync(existingImage, cancellationToken);
+                profileImage = existingImage;
+            }
+            else
+            {
+                // Criar nova imagem
+                profileImage = new UserProfileImage
+                {
+                    UserId = request.UserId,
+                    ImageData = request.ImageData,
+                    ContentType = request.ContentType,
+                    FileSizeBytes = request.ImageData.Length
+                };
+                await _userRepository.AddProfileImageAsync(profileImage, cancellationToken);
+            }
+
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            var dto = new ProfileImageDto
+            {
+                Id = profileImage.Id,
+                UserId = profileImage.UserId,
+                ContentType = profileImage.ContentType,
+                FileSizeBytes = profileImage.FileSizeBytes,
+                CreatedAt = profileImage.CreatedAt
+            };
+
+            return Result<ProfileImageDto>.Success(dto, "Imagem de perfil atualizada com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            return Result<ProfileImageDto>.Failure($"Erro ao fazer upload da imagem: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Obtém a imagem de perfil do usuário
+    /// </summary>
+    public async Task<Result<(byte[] ImageData, string ContentType)>> GetProfileImageAsync(
+        Guid userId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result<(byte[], string)>.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            // Validar permissões para visualização
+            if (actorUserId.HasValue && actorRole == UserRole.ADM)
+            {
+                var targetUser = await _userRepository.GetByIdAsync(userId, cancellationToken);
+                if (targetUser == null || targetUser.CompanyId != actor?.CompanyId)
+                {
+                    return Result<(byte[], string)>.Failure("Sem permissão para visualizar imagem deste usuário.");
+                }
+            }
+
+            var profileImage = await _userRepository.GetProfileImageAsync(userId, cancellationToken);
+
+            if (profileImage == null)
+            {
+                return Result<(byte[], string)>.Failure("Usuário não possui imagem de perfil.");
+            }
+
+            return Result<(byte[], string)>.Success(
+                (profileImage.ImageData, profileImage.ContentType),
+                "Imagem obtida com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            return Result<(byte[], string)>.Failure($"Erro ao obter imagem: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Remove a imagem de perfil do usuário
+    /// </summary>
+    public async Task<Result> DeleteProfileImageAsync(
+        Guid userId,
+        Guid? actorUserId,
+        UserRole? actorRole,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var actorResult = await ResolveActorAsync(actorUserId, actorRole, cancellationToken);
+            if (!actorResult.IsSuccess)
+                return Result.Failure(actorResult.Message);
+            var actor = actorResult.Data;
+
+            // Validar permissões
+            if (actorUserId.HasValue && actorUserId.Value != userId && actorRole != UserRole.ADM_MASTER)
+            {
+                if (actorRole == UserRole.ADM)
+                {
+                    var targetUser = await _userRepository.GetByIdAsync(userId, cancellationToken);
+                    if (targetUser == null || targetUser.CompanyId != actor?.CompanyId)
+                    {
+                        return Result.Failure("Sem permissão para remover imagem deste usuário.");
+                    }
+                }
+                else
+                {
+                    return Result.Failure("Você só pode remover sua própria imagem de perfil.");
+                }
+            }
+
+            var profileImage = await _userRepository.GetProfileImageAsync(userId, cancellationToken);
+
+            if (profileImage == null)
+            {
+                return Result.Success("Usuário não possui imagem de perfil.");
+            }
+
+            await _userRepository.DeleteProfileImageAsync(profileImage, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+
+            return Result.Success("Imagem de perfil removida com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Erro ao remover imagem: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Classe auxiliar para deserialização da resposta da API ViaCEP
     /// </summary>
     private class ViaCepResponse
