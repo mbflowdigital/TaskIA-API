@@ -1,21 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel;
 
 namespace Domain.Enums
 {
+    /// <summary>
+    /// Funções/Posições de membros em projetos.
+    /// Valores alinhados com o frontend (roleOptions).
+    /// </summary>
     public enum UserPosition
     {
-        Developer = 1,
-        Designer = 2,
-        ProjectManager = 3,
-        ProductOwner = 4,
-        ScrumMaster = 5,
-        QA = 6,
-        DevOps = 7,
-        Analyst = 8,
-        Other = 99
+        GerenteDeProjeto = 1,
+        Coordenador = 2,
+        Supervisor = 3,
+        Engenheiro = 4,
+        Tecnico = 5,
+        Especialista = 6,
+        Analista = 7,
+        Operador = 8,
+        Assistente = 9,
+        Administrador = 10,
+        Consultor = 11
     }
 }
