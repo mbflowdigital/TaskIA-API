@@ -274,6 +274,12 @@ public class BoardService : IBoardService
         await _boardRepository.UpdateAsync(board, cancellationToken);
         await _unitOfWork.CommitAsync(cancellationToken);
 
+        // Se for uma subtarefa, sincronizar o status da tarefa pai
+        if (board.ParentTaskId.HasValue)
+        {
+            await SyncParentTaskStatusAsync(board.ParentTaskId.Value, cancellationToken);
+        }
+
         var updatedBoard = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
         if (updatedBoard == null)
             return Result<BoardDto>.Failure("Erro ao recuperar a tarefa atualizada.");
@@ -370,6 +376,56 @@ public class BoardService : IBoardService
         );
 
         return Result<BoardStatisticsDto>.Success(statistics);
+    }
+
+    /// <summary>
+    /// Sincroniza o status da tarefa pai baseado no status das subtarefas
+    /// Regras:
+    /// - Se qualquer subtarefa estiver "Em Andamento", a tarefa pai vai para "Em Andamento"
+    /// - Se todas as subtarefas estiverem "Concluído", a tarefa pai vai para "Concluído"
+    /// - Se todas as subtarefas estiverem "A Fazer", a tarefa pai volta para "A Fazer"
+    /// </summary>
+    private async Task SyncParentTaskStatusAsync(Guid parentTaskId, CancellationToken cancellationToken)
+    {
+        var parentTask = await _boardRepository.GetByIdWithProjectAsync(parentTaskId, cancellationToken);
+        if (parentTask == null || parentTask.SubTasks == null || !parentTask.SubTasks.Any())
+            return;
+
+        var subTasks = parentTask.SubTasks.Where(st => st.IsActive).ToList();
+        if (!subTasks.Any())
+            return;
+
+        string newStatus;
+
+        // Se todas as subtarefas estão concluídas, a tarefa pai deve ser concluída
+        if (subTasks.All(st => st.Status == "Concluído"))
+        {
+            newStatus = "Concluído";
+        }
+        // Se qualquer subtarefa está em andamento, a tarefa pai deve estar em andamento
+        else if (subTasks.Any(st => st.Status == "Em Andamento"))
+        {
+            newStatus = "Em Andamento";
+        }
+        // Se todas as subtarefas estão "A Fazer", a tarefa pai também fica "A Fazer"
+        else if (subTasks.All(st => st.Status == "A Fazer"))
+        {
+            newStatus = "A Fazer";
+        }
+        else
+        {
+            // Estado misto: se tem concluídas e a fazer, mas nenhuma em andamento
+            // Mantém o status atual da tarefa pai ou coloca em andamento
+            newStatus = parentTask.Status == "Concluído" ? "Em Andamento" : parentTask.Status;
+        }
+
+        // Só atualiza se o status mudou
+        if (parentTask.Status != newStatus)
+        {
+            parentTask.UpdateStatus(newStatus);
+            await _boardRepository.UpdateAsync(parentTask, cancellationToken);
+            await _unitOfWork.CommitAsync(cancellationToken);
+        }
     }
 
     // Métodos auxiliares
