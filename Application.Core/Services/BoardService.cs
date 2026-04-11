@@ -343,9 +343,20 @@ public class BoardService : IBoardService
 
     public async Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var board = await _boardRepository.GetByIdAsync(id, cancellationToken);
+        var board = await _boardRepository.GetByIdWithProjectAsync(id, cancellationToken);
         if (board == null)
-            return Result.Failure("Tarefa não encontrada.");
+            return Result.Failure("Tarefa n\u00e3o encontrada.");
+
+        // Soft-delete subtarefas ativas antes de deletar a tarefa pai
+        if (board.SubTasks != null)
+        {
+            var activeSubTasks = board.SubTasks.Where(st => st.IsActive).ToList();
+            foreach (var sub in activeSubTasks)
+            {
+                sub.SoftDelete();
+                await _boardRepository.UpdateAsync(sub, cancellationToken);
+            }
+        }
 
         board.SoftDelete();
 

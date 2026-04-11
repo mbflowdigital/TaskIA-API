@@ -23,9 +23,9 @@ public class BoardRepository : Repository<Board>, IBoardRepository
         return await _dbSet
             .Include(t => t.Responsavel)
             .Include(t => t.SugestaoResponsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.Responsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.SugestaoResponsavel)
             .Where(t => t.ProjectId == projectId && t.IsActive)
             .OrderBy(t => t.OrdemNoBoard)
@@ -41,9 +41,9 @@ public class BoardRepository : Repository<Board>, IBoardRepository
         return await _dbSet
             .Include(t => t.Responsavel)
             .Include(t => t.SugestaoResponsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.Responsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.SugestaoResponsavel)
             .Where(t => t.ProjectId == projectId && t.Status == status && t.IsActive)
             .OrderBy(t => t.OrdemNoBoard)
@@ -119,9 +119,9 @@ public class BoardRepository : Repository<Board>, IBoardRepository
             .Include(t => t.Project)
             .Include(t => t.Responsavel)
             .Include(t => t.SugestaoResponsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.Responsavel)
-            .Include(t => t.SubTasks)
+            .Include(t => t.SubTasks.Where(st => st.IsActive))
                 .ThenInclude(st => st.SugestaoResponsavel)
             .FirstOrDefaultAsync(t => t.Id == id && t.IsActive, cancellationToken);
     }
