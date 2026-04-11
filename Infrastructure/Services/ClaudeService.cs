@@ -348,8 +348,9 @@ public class ClaudeService
             Console.WriteLine("[DEBUG] ==================");
             var analysis = ParseAnalysis(text, prompt);
 
-            var projects = await _projectRepository.FindByNameAsync(data.ProjectName, cancellationToken);
-            var project = projects.FirstOrDefault();
+            var project = data.ProjectId != Guid.Empty
+                ? await _projectRepository.GetByIdAsync(data.ProjectId, cancellationToken)
+                : null;
 
             if (project != null)
             {
