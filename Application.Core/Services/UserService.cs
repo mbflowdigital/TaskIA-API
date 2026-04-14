@@ -273,8 +273,11 @@ public class UserService : IUserService
                 return Result<UserDto>.Failure("Usuário está desativado e não pode ser atualizado");
             }
 
-            // Atualizar informações
-            user.UpdateProfile(request.Name, request.Phone);
+            // Atualizar informações básicas
+            user.UpdateProfile(request.Name, request.Phone, request.CompanyId);
+            
+            // Sempre atualizar position (permite definir, alterar ou remover o cargo)
+            user.UpdatePosition(request.PositionId);
 
             // Persistir alterações
             await _userRepository.UpdateAsync(user, cancellationToken);
@@ -494,6 +497,7 @@ public class UserService : IUserService
             CPF = user.CPF,
             BirthDate = user.BirthDate,
             Role = user.Role?.RoleName ?? "USER",
+            PositionId = user.PositionId,
             IsEmailVerified = user.IsEmailVerified,
             IsFirstAccess = user.IsFirstAccess,
             IsActive = user.IsActive,
