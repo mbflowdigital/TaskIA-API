@@ -75,7 +75,8 @@ public class ProjectService : IProjectService
                 {
                     // Validar se o usuário existe
                     var memberUserExists = await _projectRepository.UserExistsAsync(memberRequest.UserId, cancellationToken);
-                    if (!memberUserExists);
+                    if (!memberUserExists)
+                        continue;
 
                     var member = new ProjectMemberEntity
                     {
@@ -94,8 +95,10 @@ public class ProjectService : IProjectService
             await _projectRepository.AddAsync(project, cancellationToken);
             await _unitOfWork.CommitAsync(cancellationToken);
 
-            project = await _projectRepository.GetByIdAsync(project.Id, cancellationToken);
-            return Result<ProjectDto>.Success(MapToDto(project!), "Projeto criado com sucesso");
+            // Atribui navegações já carregadas para evitar um GetByIdAsync pesado (10 Includes) ao DB remoto
+            project.User = actor;
+
+            return Result<ProjectDto>.Success(MapToDto(project), "Projeto criado com sucesso");
         }
         catch (Exception ex)
         {
