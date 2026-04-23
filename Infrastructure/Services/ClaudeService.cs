@@ -808,24 +808,25 @@ public class ClaudeService
 
             var text = claudeResponse?.Content?.FirstOrDefault()?.Text ?? string.Empty;
 
-            // 8. Parsear resposta (array de tarefas)
+            // 8. Parsear resposta (array de macros estratégicas)
             var tasks = ParseTasksArray(text);
 
             if (tasks.Count == 0)
-                return Result<TasksGenerationResult>.Failure("Nenhuma tarefa foi gerada pela IA.");
+                return Result<TasksGenerationResult>.Failure("Nenhuma macro foi gerada pela IA.");
 
-            // 9. Separar tarefas principais de subtarefas
+            // 9. Para macros estratégicas, todas são tarefas principais (sem subtarefas)
             var mainTasks = tasks.Where(t => t.ParentTaskOrder == null).ToList();
-            var subTasks = tasks.Where(t => t.ParentTaskOrder != null).ToList();
 
-            Console.WriteLine($"[INFO] Total de tarefas: {tasks.Count} (Principais: {mainTasks.Count}, Subtarefas: {subTasks.Count})");
+            if (mainTasks.Count < 5 || mainTasks.Count > 10)
+            {
+                Console.WriteLine($"[WARNING] IA gerou {mainTasks.Count} macros. Esperado: 5-10. Ajustando...");
+            }
+
+            Console.WriteLine($"[INFO] Total de macros estratégicas: {mainTasks.Count}");
 
             var teamMembers = projectDetails.ProjectMembers.ToList();
 
-            // Dicionário para mapear IDs temporários (da IA) para IDs reais (do banco)
-            var taskIdMapping = new Dictionary<Guid, Guid>();
-
-            // 10. Criar tarefas principais primeiro
+            // 10. Criar macros estratégicas (todas são tarefas principais)
             var mainBoards = new List<Domain.Entities.Board>();
 
             foreach (var task in mainTasks)
@@ -857,97 +858,32 @@ public class ClaudeService
                     sugestaoResponsavelId: sugestaoResponsavelId,
                     prazoEmDias: task.DeadlineInDays,
                     ordemNoBoard: task.Order,
-                    parentTaskId: null // Tarefas principais não têm pai
+                    parentTaskId: null // Macros estratégicas não têm pai
                 );
 
                 // Atribuir criador do projeto como responsável inicial
                 board.AssignResponsavel(project.UserId);
                 mainBoards.Add(board);
 
-                // Mapear ID temporário (gerado pela IA) para ID real (do banco)
-                // IMPORTANTE: Precisamos de um identificador único da tarefa da IA
-                // Como não temos, vamos usar a Order como chave temporária
-                Console.WriteLine($"[DEBUG] Tarefa principal '{task.Name}' criada com ID: {board.Id} (Order: {task.Order})");
+                Console.WriteLine($"[DEBUG] Macro estratégica '{task.Name}' criada com ID: {board.Id}");
             }
 
-            // Salvar tarefas principais
+            // Salvar macros estratégicas
             await _boardRepository.AddRangeAsync(mainBoards, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
-            Console.WriteLine($"[SUCCESS] ✓ {mainBoards.Count} tarefas principais criadas no banco");
+            Console.WriteLine($"[SUCCESS] ✓ {mainBoards.Count} macros estratégicas criadas no banco");
 
-            // 11. Criar dicionário de mapeamento usando Order como chave
-            // (assumindo que Order é único por tarefa conforme instruções do prompt)
-            var orderToIdMap = mainBoards.ToDictionary(b => b.OrdemNoBoard, b => b.Id);
-
-            // 12. Criar subtarefas usando IDs reais das tarefas pai
-            var subBoards = new List<Domain.Entities.Board>();
-
-            foreach (var task in subTasks)
-            {
-                // Mapear ParentTaskOrder (decimal) para ParentTaskId (Guid) real
-                Guid? parentTaskId = null;
-                if (task.ParentTaskOrder.HasValue)
-                {
-                    if (orderToIdMap.TryGetValue(task.ParentTaskOrder.Value, out var parentId))
-                    {
-                        parentTaskId = parentId;
-                        Console.WriteLine($"[DEBUG] Subtarefa '{task.Name}' linkada à tarefa pai com Order {task.ParentTaskOrder.Value} (ID: {parentId})");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[WARNING] Tarefa pai com Order {task.ParentTaskOrder.Value} não encontrada para subtarefa '{task.Name}'. Criando como tarefa principal.");
-                    }
-                }
-
-                // Buscar usuário sugerido
-                Guid? sugestaoResponsavelId = null;
-                if (!string.IsNullOrWhiteSpace(task.SuggestedResponsible))
-                {
-                    var teamMember = teamMembers.FirstOrDefault(m => 
-                        m.User != null && m.User.Name.Equals(task.SuggestedResponsible, StringComparison.OrdinalIgnoreCase));
-
-                    if (teamMember != null)
-                    {
-                        sugestaoResponsavelId = teamMember.UserId;
-                    }
-                }
-
-                var board = new Domain.Entities.Board(
-                    projectId: project.Id,
-                    name: task.Name,
-                    description: task.Description,
-                    status: "A Fazer",
-                    priority: task.Priority,
-                    sugestaoResponsavelId: sugestaoResponsavelId,
-                    prazoEmDias: task.DeadlineInDays,
-                    ordemNoBoard: task.Order,
-                    parentTaskId: parentTaskId // ✓ Usando Guid mapeado do ParentTaskOrder
-                );
-
-                board.AssignResponsavel(project.UserId);
-                subBoards.Add(board);
-            }
-
-            if (subBoards.Count > 0)
-            {
-                await _boardRepository.AddRangeAsync(subBoards, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                Console.WriteLine($"[SUCCESS] ✓ {subBoards.Count} subtarefas criadas no banco");
-            }
-
-            var totalCreated = mainBoards.Count + subBoards.Count;
-
-            // 13. Mudar status do projeto para Active
+            // Atualizar status do projeto para Active
             project.UpdateStatus("Active");
             await _projectRepository.UpdateAsync(project, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            Console.WriteLine($"[SUCCESS] ✓ {totalCreated} tarefas criadas e projeto ativado!");
+            Console.WriteLine($"[SUCCESS] ✓ {mainBoards.Count} macros estratégicas criadas e projeto ativado!");
 
-            var result = new TasksGenerationResult(tasks, totalCreated, prompt);
-            return Result<TasksGenerationResult>.Success(result, $"{totalCreated} tarefas criadas com sucesso. Projeto ativado.");
+            var result = new TasksGenerationResult(tasks, mainBoards.Count, prompt);
+            return Result<TasksGenerationResult>.Success(result, $"{mainBoards.Count} macros estratégicas criadas com sucesso. Projeto ativado.");
         }
         catch (Exception ex)
         {
@@ -984,6 +920,8 @@ public class ClaudeService
         var mediumRisks = ExtractRisksByLevel(risks, "🟡", "🟢");
         var lowRisks = ExtractRisksByLevel(risks, "🟢", null);
 
+        var topRecommendations = ExtractTopRecommendations(project.IA_Recommendations ?? "", 5);
+
         return template
             .Replace("{ProjectName}", project.Name)
             .Replace("{StartDate}", startDate)
@@ -996,7 +934,26 @@ public class ClaudeService
             .Replace("{HighRisks}", highRisks)
             .Replace("{MediumRisks}", mediumRisks)
             .Replace("{LowRisks}", lowRisks)
-            .Replace("{Recommendations}", project.IA_Recommendations ?? "");
+            .Replace("{Top5Recommendations}", topRecommendations);
+    }
+
+    private static string ExtractTopRecommendations(string recommendations, int maxCount)
+    {
+        if (string.IsNullOrWhiteSpace(recommendations))
+            return "Nenhuma recomendação específica identificada";
+
+        // Dividir por quebras de linha ou pontos
+        var parts = recommendations
+            .Split(new[] { '\n', '.', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(r => r.Trim())
+            .Where(r => !string.IsNullOrWhiteSpace(r) && r.Length > 10)
+            .Take(maxCount)
+            .ToList();
+
+        if (!parts.Any())
+            return "Nenhuma recomendação específica identificada";
+
+        return string.Join("\n• ", "", parts);
     }
 
     private static string ExtractRisksByLevel(string allRisks, string startEmoji, string? endEmoji)
