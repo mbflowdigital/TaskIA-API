@@ -320,10 +320,10 @@ public class UsersController : ControllerBase
     /// <param name="cancellationToken">Token de cancelamento</param>
     /// <returns>Arquivo de imagem</returns>
     /// <response code="200">Imagem retornada com sucesso</response>
-    /// <response code="404">Usuário não possui imagem de perfil</response>
+    /// <response code="204">Usuário não possui imagem de perfil</response>
     [HttpGet("{userId:guid}/profile-image")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(Result), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> GetProfileImage(
         Guid userId,
         CancellationToken cancellationToken)
@@ -334,7 +334,7 @@ public class UsersController : ControllerBase
 
         if (!result.IsSuccess)
         {
-            return NotFound(Result.Failure(result.Message));
+            return NoContent();
         }
 
         return File(result.Data.ImageData, result.Data.ContentType);

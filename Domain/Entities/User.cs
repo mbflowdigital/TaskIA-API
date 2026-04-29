@@ -77,10 +77,20 @@ public class User : BaseEntity
         return (UserRole)RoleId;
     }
 
-    public void UpdateProfile(string name, string? phone)
+    public void UpdateProfile(string name, string? phone, Guid? companyId = null)
     {
         Name = name;
         Phone = phone;
+        if (companyId.HasValue)
+        {
+            CompanyId = companyId.Value;
+        }
+        SetUpdatedAt();
+    }
+
+    public void UpdatePosition(int? positionId)
+    {
+        PositionId = positionId;
         SetUpdatedAt();
     }
 

@@ -132,7 +132,7 @@ public class Project : BaseEntity
     /// </summary>
     private static bool IsValidStatus(string status)
     {
-        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Waiting_Approve" };
+        var validStatuses = new[] { "Draft", "Active", "Paused", "Completed", "Cancelled", "Inactive", "Waiting_Approve" };
         return validStatuses.Contains(status);
     }
 

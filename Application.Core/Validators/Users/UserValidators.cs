@@ -59,5 +59,9 @@ public class UpdateUserRequestValidator : AbstractValidator<UpdateUserRequest>
         RuleFor(x => x.Phone)
             .MaximumLength(20).WithMessage("Telefone deve ter no máximo 20 caracteres")
             .When(x => !string.IsNullOrEmpty(x.Phone));
+
+        RuleFor(x => x.PositionId)
+            .GreaterThan(0).WithMessage("PositionId deve ser maior que zero")
+            .When(x => x.PositionId.HasValue);
     }
 }

@@ -13,6 +13,7 @@ public record UserDto
     public string CPF { get; init; } = string.Empty;
     public DateTime BirthDate { get; init; }
     public string Role { get; init; } = "USER";
+    public int? PositionId { get; init; }
     public bool IsEmailVerified { get; init; }
     public bool IsFirstAccess { get; init; }
     public bool IsActive { get; init; }
@@ -40,7 +41,9 @@ public record CreateUserRequest(
 public record UpdateUserRequest(
     Guid Id,
     string Name,
-    string? Phone = null
+    string? Phone = null,
+    Guid? CompanyId = null,
+    int? PositionId = null
 )
 {};
 
